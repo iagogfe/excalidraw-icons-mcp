@@ -307,6 +307,7 @@ export function generateId(): string {
 
 // Normalize fontFamily from string names to numeric values that Excalidraw expects
 // Excalidraw uses: 1 = Virgil (handwritten), 2 = Helvetica (sans-serif), 3 = Cascadia (monospace)
+// 5 = Excalifont, 6 = Nunito, 7 = Lilita One, 8 = Comic Shanns
 export function normalizeFontFamily(fontFamily: string | number | undefined): number | undefined {
   if (fontFamily === undefined) return undefined;
   if (typeof fontFamily === 'number') return fontFamily;
@@ -314,7 +315,11 @@ export function normalizeFontFamily(fontFamily: string | number | undefined): nu
     'virgil': 1, 'hand': 1, 'handwritten': 1,
     'helvetica': 2, 'sans': 2, 'sans-serif': 2,
     'cascadia': 3, 'mono': 3, 'monospace': 3,
-    '1': 1, '2': 2, '3': 3,
+    'excalifont': 5,
+    'nunito': 6,
+    'lilita': 7, 'lilita one': 7,
+    'comic shanns': 8, 'comic': 8,
+    '1': 1, '2': 2, '3': 3, '5': 5, '6': 6, '7': 7, '8': 8,
   };
-  return map[fontFamily.toLowerCase()] ?? 1;
+  return map[fontFamily.toLowerCase()];
 }

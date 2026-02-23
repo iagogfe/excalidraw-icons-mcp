@@ -388,7 +388,7 @@ const tools: Tool[] = [
         opacity: { type: 'number' },
         text: { type: 'string' },
         fontSize: { type: 'number' },
-        fontFamily: { type: 'string', description: 'Font family name (virgil, helvetica, cascadia) or numeric ID (1, 2, 3)' },
+        fontFamily: { type: ['string', 'number'], description: 'Font family: virgil/hand/handwritten (1), helvetica/sans/sans-serif (2), cascadia/mono/monospace (3), excalifont (5), nunito (6), lilita/lilita one (7), comic shanns/comic (8), or numeric ID' },
         startElementId: { type: 'string', description: 'For arrows: ID of the element to bind the arrow start to. Arrow auto-routes to element edge.' },
         endElementId: { type: 'string', description: 'For arrows: ID of the element to bind the arrow end to. Arrow auto-routes to element edge.' },
         endArrowhead: { type: 'string', description: 'Arrowhead style at end: arrow, bar, dot, triangle, or null' },
@@ -420,7 +420,7 @@ const tools: Tool[] = [
         opacity: { type: 'number' },
         text: { type: 'string' },
         fontSize: { type: 'number' },
-        fontFamily: { type: 'string', description: 'Font family name (virgil, helvetica, cascadia) or numeric ID (1, 2, 3)' }
+        fontFamily: { type: ['string', 'number'], description: 'Font family: virgil/hand/handwritten (1), helvetica/sans/sans-serif (2), cascadia/mono/monospace (3), excalifont (5), nunito (6), lilita/lilita one (7), comic shanns/comic (8), or numeric ID' }
       },
       required: ['id']
     }
@@ -619,7 +619,7 @@ const tools: Tool[] = [
               opacity: { type: 'number' },
               text: { type: 'string' },
               fontSize: { type: 'number' },
-              fontFamily: { type: 'string', description: 'Font family name (virgil, helvetica, cascadia) or numeric ID (1, 2, 3)' },
+              fontFamily: { type: ['string', 'number'], description: 'Font family: virgil/hand/handwritten (1), helvetica/sans/sans-serif (2), cascadia/mono/monospace (3), excalifont (5), nunito (6), lilita/lilita one (7), comic shanns/comic (8), or numeric ID' },
               startElementId: { type: 'string', description: 'For arrows: ID of element to bind arrow start to' },
               endElementId: { type: 'string', description: 'For arrows: ID of element to bind arrow end to' },
               endArrowhead: { type: 'string', description: 'Arrowhead style at end: arrow, bar, dot, triangle, or null' },
