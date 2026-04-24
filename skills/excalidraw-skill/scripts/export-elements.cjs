@@ -4,7 +4,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const DEFAULT_URL = process.env.EXPRESS_SERVER_URL || "http://localhost:3000";
+const DEFAULT_URL = process.env.EXPRESS_SERVER_URL || "http://127.0.0.1:3000";
 
 function parseArgs(argv) {
   const out = { url: DEFAULT_URL, outFile: null };

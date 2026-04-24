@@ -46,7 +46,7 @@ USER nodejs
 
 # Set environment variables with defaults
 ENV NODE_ENV=production
-ENV EXPRESS_SERVER_URL=http://localhost:3000
+ENV EXPRESS_SERVER_URL=http://127.0.0.1:3000
 ENV ENABLE_CANVAS_SYNC=true
 
 # Run MCP server (stdin/stdout protocol)

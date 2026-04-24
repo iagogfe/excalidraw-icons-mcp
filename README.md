@@ -44,7 +44,7 @@ Keywords: Excalidraw agent skill, Excalidraw MCP server, AI diagramming, Claude 
 
 This repo contains two separate processes:
 
-- Canvas server: web UI + REST API + WebSocket updates (default `http://localhost:3000`)
+- Canvas server: web UI + REST API + WebSocket updates (default `http://127.0.0.1:3000`)
 - MCP server: exposes MCP tools over stdio; syncs to the canvas via `EXPRESS_SERVER_URL`
 
 ## How We Differ from the Official Excalidraw MCP
@@ -105,13 +105,13 @@ Terminal 1: start the canvas
 PORT=3000 npm run canvas
 ```
 
-> **Security note:** The server defaults to binding on `localhost` only. If you need to expose it on a network interface (e.g. Docker, remote access), set `HOST=0.0.0.0` — but ensure you have network-level access controls in place, as the API has no built-in authentication.
+> **Security note:** The server defaults to binding on `127.0.0.1` only. If you need to expose it on a network interface (e.g. Docker, remote access), set `HOST=0.0.0.0` — but ensure you have network-level access controls in place, as the API has no built-in authentication.
 
-Open `http://localhost:3000`.
+Open `http://127.0.0.1:3000`.
 
 Terminal 2: run the MCP server (stdio)
 ```bash
-EXPRESS_SERVER_URL=http://localhost:3000 node dist/index.js
+EXPRESS_SERVER_URL=http://127.0.0.1:3000 node dist/index.js
 ```
 
 ## Quick Start (Docker)
@@ -131,7 +131,7 @@ The MCP server runs over stdio and can be configured with any MCP-compatible cli
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `EXPRESS_SERVER_URL` | URL of the canvas server | `http://localhost:3000` |
+| `EXPRESS_SERVER_URL` | URL of the canvas server | `http://127.0.0.1:3000` |
 | `ENABLE_CANVAS_SYNC` | Enable real-time canvas sync | `true` |
 
 ---
@@ -151,7 +151,7 @@ Config location:
       "command": "node",
       "args": ["/absolute/path/to/mcp_excalidraw/dist/index.js"],
       "env": {
-        "EXPRESS_SERVER_URL": "http://localhost:3000",
+        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
         "ENABLE_CANVAS_SYNC": "true"
       }
     }
@@ -185,7 +185,7 @@ Use the `claude mcp add` command to register the MCP server.
 **Local (node)** - User-level (available across all projects):
 ```bash
 claude mcp add excalidraw --scope user \
-  -e EXPRESS_SERVER_URL=http://localhost:3000 \
+  -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
   -e ENABLE_CANVAS_SYNC=true \
   -- node /absolute/path/to/mcp_excalidraw/dist/index.js
 ```
@@ -193,7 +193,7 @@ claude mcp add excalidraw --scope user \
 **Local (node)** - Project-level (shared via `.mcp.json`):
 ```bash
 claude mcp add excalidraw --scope project \
-  -e EXPRESS_SERVER_URL=http://localhost:3000 \
+  -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
   -e ENABLE_CANVAS_SYNC=true \
   -- node /absolute/path/to/mcp_excalidraw/dist/index.js
 ```
@@ -227,7 +227,7 @@ Config location: `.cursor/mcp.json` in your project root (or `~/.cursor/mcp.json
       "command": "node",
       "args": ["/absolute/path/to/mcp_excalidraw/dist/index.js"],
       "env": {
-        "EXPRESS_SERVER_URL": "http://localhost:3000",
+        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
         "ENABLE_CANVAS_SYNC": "true"
       }
     }
@@ -261,7 +261,7 @@ Use the `codex mcp add` command to register the MCP server.
 **Local (node)**
 ```bash
 codex mcp add excalidraw \
-  --env EXPRESS_SERVER_URL=http://localhost:3000 \
+  --env EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
   --env ENABLE_CANVAS_SYNC=true \
   -- node /absolute/path/to/mcp_excalidraw/dist/index.js
 ```
@@ -297,7 +297,7 @@ Config location: `~/.config/opencode/opencode.json` or project-level `opencode.j
       "command": ["node", "/absolute/path/to/mcp_excalidraw/dist/index.js"],
       "enabled": true,
       "environment": {
-        "EXPRESS_SERVER_URL": "http://localhost:3000",
+        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
         "ENABLE_CANVAS_SYNC": "true"
       }
     }
@@ -333,7 +333,7 @@ Config location: `~/.gemini/antigravity/mcp_config.json`
       "command": "node",
       "args": ["/absolute/path/to/mcp_excalidraw/dist/index.js"],
       "env": {
-        "EXPRESS_SERVER_URL": "http://localhost:3000",
+        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
         "ENABLE_CANVAS_SYNC": "true"
       }
     }
@@ -406,7 +406,7 @@ To update an existing installation, remove the old folder first then re-copy.
 
 ### Use The Skill Scripts
 
-All scripts respect `EXPRESS_SERVER_URL` (default `http://localhost:3000`) or accept `--url`.
+All scripts respect `EXPRESS_SERVER_URL` (default `http://127.0.0.1:3000`) or accept `--url`.
 
 ```bash
 EXPRESS_SERVER_URL=http://127.0.0.1:3000 node skills/excalidraw-skill/scripts/healthcheck.cjs
@@ -443,7 +443,13 @@ Full schemas are discoverable via `tools/list` or in `skills/excalidraw-skill/re
 ### Canvas Smoke Test (HTTP)
 
 ```bash
-curl http://localhost:3000/health
+curl http://127.0.0.1:3000/health
+```
+
+### Local Bind Regression Test
+
+```bash
+npm run test:bind
 ```
 
 ### MCP Smoke Test (MCP Inspector)
@@ -451,7 +457,7 @@ curl http://localhost:3000/health
 List tools:
 ```bash
 npx @modelcontextprotocol/inspector --cli \
-  -e EXPRESS_SERVER_URL=http://localhost:3000 \
+  -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
   -e ENABLE_CANVAS_SYNC=true -- \
   node dist/index.js --method tools/list
 ```
@@ -459,7 +465,7 @@ npx @modelcontextprotocol/inspector --cli \
 Create a rectangle:
 ```bash
 npx @modelcontextprotocol/inspector --cli \
-  -e EXPRESS_SERVER_URL=http://localhost:3000 \
+  -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
   -e ENABLE_CANVAS_SYNC=true -- \
   node dist/index.js --method tools/call --tool-name create_element \
   --tool-arg type=rectangle --tool-arg x=100 --tool-arg y=100 \

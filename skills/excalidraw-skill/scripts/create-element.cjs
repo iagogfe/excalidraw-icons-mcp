@@ -3,7 +3,7 @@
 
 const fs = require("node:fs");
 
-const DEFAULT_URL = process.env.EXPRESS_SERVER_URL || "http://localhost:3000";
+const DEFAULT_URL = process.env.EXPRESS_SERVER_URL || "http://127.0.0.1:3000";
 
 function usage() {
   console.error(

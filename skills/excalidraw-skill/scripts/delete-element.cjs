@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
 
-const DEFAULT_URL = process.env.EXPRESS_SERVER_URL || "http://localhost:3000";
+const DEFAULT_URL = process.env.EXPRESS_SERVER_URL || "http://127.0.0.1:3000";
 
 function usage() {
   console.error("Usage: node scripts/delete-element.cjs --id <id> [--url <canvasUrl>]");

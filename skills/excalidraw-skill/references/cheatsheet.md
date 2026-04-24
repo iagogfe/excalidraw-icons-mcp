@@ -2,7 +2,7 @@
 
 ## Defaults
 
-- Canvas base URL: `EXPRESS_SERVER_URL` (default `http://localhost:3000`)
+- Canvas base URL: `EXPRESS_SERVER_URL` (default `http://127.0.0.1:3000`)
 - Canvas health: `GET /health`
 
 ## MCP Tools (26 total)
