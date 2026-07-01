@@ -572,10 +572,10 @@ function resolveArrowBindings(batchElements: ServerElement[]): void {
   const elementMap = new Map<string, ServerElement>();
   batchElements.forEach(el => elementMap.set(el.id, el));
 
-  // Also check existing elements for cross-batch references
-  elements.forEach((el, id) => {
-    if (!elementMap.has(id)) elementMap.set(id, el);
-  });
+  // Resolve a referenced id from the batch first, then the existing store.
+  // Using per-reference O(1) Map lookups avoids scanning the whole store on
+  // every batch (which grows costly as the canvas fills up).
+  const resolveRef = (id: string): ServerElement | undefined => elementMap.get(id) ?? elements.get(id);
 
   for (const el of batchElements) {
     if (el.type !== 'arrow' && el.type !== 'line') continue;
@@ -584,8 +584,8 @@ function resolveArrowBindings(batchElements: ServerElement[]): void {
 
     if (!startRef && !endRef) continue;
 
-    const startEl = startRef ? elementMap.get(startRef.id) : undefined;
-    const endEl = endRef ? elementMap.get(endRef.id) : undefined;
+    const startEl = startRef ? resolveRef(startRef.id) : undefined;
+    const endEl = endRef ? resolveRef(endRef.id) : undefined;
 
     // Calculate arrow path from edge to edge
     const startCenter = startEl
@@ -644,6 +644,7 @@ app.post('/api/elements/batch', (req: Request, res: Response) => {
     }
 
     const createdElements: ServerElement[] = [];
+    const nowIso = new Date().toISOString();
 
     elementsToCreate.forEach(elementData => {
       const params = CreateElementSchema.parse(elementData);
@@ -653,8 +654,8 @@ app.post('/api/elements/batch', (req: Request, res: Response) => {
         id,
         ...params,
         fontFamily: normalizeFontFamily(params.fontFamily),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
         version: 1
       };
 
