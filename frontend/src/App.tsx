@@ -333,10 +333,13 @@ function App(): JSX.Element {
     }
   }, [])
 
-  // WebSocket connection
+  // WebSocket connection — deferred a tick so the WS handshake/handlers don't
+  // compete with the Excalidraw mount for the main thread on first paint.
+  // Initial elements arrive via the HTTP prefetch, so nothing renders late.
   useEffect(() => {
-    connectWebSocket()
+    const deferId = setTimeout(connectWebSocket, 0)
     return () => {
+      clearTimeout(deferId)
       if (websocketRef.current) {
         websocketRef.current.close()
       }
