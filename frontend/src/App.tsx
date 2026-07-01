@@ -8,8 +8,9 @@ import {
   exportToSvg
 } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement, NonDeleted, NonDeletedExcalidrawElement } from '@excalidraw/excalidraw/types/element/types'
-import { convertMermaidToExcalidraw, DEFAULT_MERMAID_CONFIG } from './utils/mermaidConverter'
 import type { MermaidConfig } from '@excalidraw/mermaid-to-excalidraw'
+// mermaidConverter (and the heavy mermaid library it pulls) is imported lazily
+// in the mermaid_convert handler so it stays out of the initial bundle.
 
 // Type definitions
 type ExcalidrawAPIRefValue = ExcalidrawImperativeAPI;
@@ -706,6 +707,7 @@ function App(): JSX.Element {
           console.log('Received Mermaid conversion request from MCP')
           if (data.mermaidDiagram) {
             try {
+              const { convertMermaidToExcalidraw, DEFAULT_MERMAID_CONFIG } = await import('./utils/mermaidConverter')
               const result = await convertMermaidToExcalidraw(data.mermaidDiagram, data.config || DEFAULT_MERMAID_CONFIG)
 
               if (result.error) {
