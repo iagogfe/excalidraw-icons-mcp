@@ -165,7 +165,10 @@ const CreateElementSchema = z.object({
   fileId: z.string().optional(),
   status: z.string().optional(),
   scale: z.tuple([z.number(), z.number()]).optional(),
-});
+  // Passthrough: library items and Excalidraw-native elements carry many more
+  // props (angle, seed, containerId, textAlign, pressures, ...). Validate the
+  // essentials above but preserve everything else instead of stripping it.
+}).passthrough();
 
 const UpdateElementSchema = z.object({
   id: z.string(),
