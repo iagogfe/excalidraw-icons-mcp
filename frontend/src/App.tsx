@@ -333,10 +333,13 @@ function App(): JSX.Element {
     }
   }, [])
 
-  // WebSocket connection
+  // WebSocket connection — deferred a tick so the WS handshake/handlers don't
+  // compete with the Excalidraw mount for the main thread on first paint.
+  // Initial elements arrive via the HTTP prefetch, so nothing renders late.
   useEffect(() => {
-    connectWebSocket()
+    const deferId = setTimeout(connectWebSocket, 0)
     return () => {
+      clearTimeout(deferId)
       if (websocketRef.current) {
         websocketRef.current.close()
       }
@@ -347,22 +350,40 @@ function App(): JSX.Element {
   useEffect(() => {
     if (excalidrawAPI) {
       loadExistingElements()
-
-      // Ensure WebSocket is connected for real-time updates
-      if (!isConnected) {
-        connectWebSocket()
-      }
     }
-  }, [excalidrawAPI, isConnected])
+    // WebSocket is already established by the mount effect above; the server
+    // pushes `initial_elements` on connect, so no extra load is needed here.
+  }, [excalidrawAPI])
+
+  // Kicked off on mount so the network round-trip overlaps the (heavy) Excalidraw
+  // bundle init instead of starting only after the API becomes available.
+  const elementsPrefetchRef = useRef<Promise<ApiResponse> | null>(null)
+  useEffect(() => {
+    // Prefetch AND pre-convert during mount: the convert is pure CPU (no API
+    // needed), so running it as soon as the data lands takes it off the critical
+    // path — by the time the Excalidraw API is ready we only updateScene.
+    elementsPrefetchRef.current = fetch('/api/elements')
+      .then(r => r.json() as Promise<ApiResponse>)
+      .then((result) => {
+        if (result.success && result.elements && result.elements.length > 0) {
+          const cleaned = result.elements.map(cleanElementForExcalidraw)
+          ;(result as any).__converted = convertElementsPreservingImageProps(cleaned)
+        }
+        return result
+      })
+      .catch(() => ({ success: false } as ApiResponse))
+  }, [])
 
   const loadExistingElements = async (): Promise<void> => {
     try {
-      const response = await fetch('/api/elements')
-      const result: ApiResponse = await response.json()
+      const result: ApiResponse = await (
+        elementsPrefetchRef.current ?? fetch('/api/elements').then(r => r.json())
+      )
+      elementsPrefetchRef.current = null
 
       if (result.success && result.elements && result.elements.length > 0) {
-        const cleanedElements = result.elements.map(cleanElementForExcalidraw)
-        const convertedElements = convertElementsPreservingImageProps(cleanedElements)
+        const convertedElements = (result as any).__converted
+          ?? convertElementsPreservingImageProps(result.elements.map(cleanElementForExcalidraw))
         if (excalidrawAPI) {
           applySceneUpdateWithoutAutoSync(excalidrawAPI, {
             elements: convertedElements,
@@ -395,10 +416,8 @@ function App(): JSX.Element {
 
     websocketRef.current.onopen = () => {
       setIsConnected(true)
-
-      if (excalidrawAPI) {
-        setTimeout(loadExistingElements, 100)
-      }
+      // Elements arrive via the server's `initial_elements` push on connect and
+      // the one-shot loadExistingElements effect — no redundant fetch here.
     }
 
     websocketRef.current.onmessage = (event: MessageEvent) => {
@@ -461,7 +480,10 @@ function App(): JSX.Element {
 
       switch (data.type) {
         case 'initial_elements':
-          if (data.elements && data.elements.length > 0) {
+          // Skip the (expensive) convert+apply if loadExistingElements already
+          // populated the scene — the two paths race on open and doing both
+          // means converting the whole scene twice.
+          if (data.elements && data.elements.length > 0 && currentElements.length === 0) {
             const cleanedElements = data.elements.map(cleanElementForExcalidraw)
             const convertedElements = convertElementsPreservingImageProps(cleanedElements)
             applySceneUpdateWithoutAutoSync(excalidrawAPI, {

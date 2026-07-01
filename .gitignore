@@ -23,3 +23,8 @@ public/dist/
 .DS_Store
 
 docs/
+node_modules
+results.tsv
+autosearch-hitl-results.tsv
+.env
+.env.*
