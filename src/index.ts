@@ -369,11 +369,52 @@ const DIAGRAM_DESIGN_GUIDE = `# Excalidraw Diagram Design Guide
 5. **Refinement** — align, distribute, adjust spacing, screenshot to verify
 `;
 
+// Condensed design rules injected into the LLM context automatically via the
+// MCP `initialize` response (server `instructions`). Unlike read_diagram_guide,
+// these are always present, so the AI applies sizing/spacing without a tool call.
+const MCP_INSTRUCTIONS = `Excalidraw canvas toolkit. Follow these rules to produce clean, non-overlapping diagrams:
+
+SIZING (always set width AND height on shapes):
+- Minimums: rectangle 160x80, diamond 140x100, ellipse 120x80. Never smaller than 120x60.
+- Same-role shapes must share identical dimensions.
+- Fonts: body >=16, titles >=20, small labels >=14.
+
+SPACING (never overlap, avoid cramped layouts):
+- Leave a 40-80px gap between adjacent shapes.
+- Keep >=80px between shapes connected by an arrow.
+- Snap positions to a 20px grid.
+- Pick one flow direction (top-to-bottom or left-to-right) and keep it consistent.
+
+WORKFLOW:
+- Plan all coordinates upfront, then create everything in ONE batch_create_elements call instead of many create_element calls.
+- Before modifying an existing canvas, call describe_scene to read current elements and the bounding box so new elements do not collide with them.
+- Bind arrows with startElementId/endElementId (auto-routes to shape edges) instead of manual points.
+- Give shapes a custom id so arrows in the same batch can reference them.
+
+For the full color palette, diagram templates and anti-patterns, call read_diagram_guide.`;
+
+// Default dimensions applied when the AI omits width/height on a shape, so
+// elements are never rendered tiny/sizeless (a common cause of cramped canvases).
+const DEFAULT_SHAPE_SIZES: Record<string, { width: number; height: number }> = {
+  rectangle: { width: 160, height: 80 },
+  ellipse: { width: 120, height: 80 },
+  diamond: { width: 140, height: 100 }
+};
+
+function applyDefaultSize<T extends { type: string; width?: number; height?: number }>(element: T): T {
+  const defaults = DEFAULT_SHAPE_SIZES[element.type];
+  if (defaults) {
+    if (element.width === undefined) element.width = defaults.width;
+    if (element.height === undefined) element.height = defaults.height;
+  }
+  return element;
+}
+
 // Tool definitions
 const tools: Tool[] = [
   {
     name: 'create_element',
-    description: 'Create a new Excalidraw element. For arrows, use startElementId/endElementId to bind to shapes (auto-routes to edges).',
+    description: 'Create a new Excalidraw element. Always set width & height on shapes (min 120x60; typical rectangle 160x80). Leave a 40-80px gap from other elements to avoid overlap. Prefer batch_create_elements when adding more than one element. For arrows, use startElementId/endElementId to bind to shapes (auto-routes to edges).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -382,10 +423,10 @@ const tools: Tool[] = [
           type: 'string',
           enum: Object.values(EXCALIDRAW_ELEMENT_TYPES)
         },
-        x: { type: 'number' },
-        y: { type: 'number' },
-        width: { type: 'number' },
-        height: { type: 'number' },
+        x: { type: 'number', description: 'Top-left X. Snap to a 20px grid; keep >=40px clear of neighboring shapes.' },
+        y: { type: 'number', description: 'Top-left Y. Snap to a 20px grid; keep >=40px clear of neighboring shapes.' },
+        width: { type: 'number', description: 'Shape width. Recommended: rectangle 160, diamond 140, ellipse 120. Minimum 120. Defaults applied if omitted.' },
+        height: { type: 'number', description: 'Shape height. Recommended: rectangle 80, diamond 100, ellipse 80. Minimum 60. Defaults applied if omitted.' },
         backgroundColor: { type: 'string' },
         strokeColor: { type: 'string' },
         strokeWidth: { type: 'number' },
@@ -609,7 +650,7 @@ const tools: Tool[] = [
   },
   {
     name: 'batch_create_elements',
-    description: 'Create multiple Excalidraw elements at once. For arrows, use startElementId/endElementId to bind arrows to shapes — Excalidraw auto-routes to element edges. Assign custom id to shapes so arrows can reference them.',
+    description: 'Create multiple Excalidraw elements at once (preferred over repeated create_element). Plan the full layout first: set width & height on every shape (min 120x60), keep a 40-80px gap between adjacent shapes and >=80px between arrow-connected shapes, snap to a 20px grid, and use one consistent flow direction. For arrows, use startElementId/endElementId to bind to shapes — Excalidraw auto-routes to element edges. Assign custom id to shapes so arrows can reference them in the same batch.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -623,10 +664,10 @@ const tools: Tool[] = [
                 type: 'string',
                 enum: Object.values(EXCALIDRAW_ELEMENT_TYPES)
               },
-              x: { type: 'number' },
-              y: { type: 'number' },
-              width: { type: 'number' },
-              height: { type: 'number' },
+              x: { type: 'number', description: 'Top-left X. Snap to a 20px grid; keep >=40px clear of neighboring shapes.' },
+              y: { type: 'number', description: 'Top-left Y. Snap to a 20px grid; keep >=40px clear of neighboring shapes.' },
+              width: { type: 'number', description: 'Shape width. Recommended: rectangle 160, diamond 140, ellipse 120. Minimum 120. Defaults applied if omitted.' },
+              height: { type: 'number', description: 'Shape height. Recommended: rectangle 80, diamond 100, ellipse 80. Minimum 60. Defaults applied if omitted.' },
               backgroundColor: { type: 'string' },
               strokeColor: { type: 'string' },
               strokeWidth: { type: 'number' },
@@ -852,7 +893,10 @@ const server = new Server(
         description: tool.description,
         inputSchema: tool.inputSchema
       }]))
-    }
+    },
+    // Auto-injected into the client's context on initialize — always-on design
+    // guidance so diagrams come out correctly sized and spaced.
+    instructions: MCP_INSTRUCTIONS
   }
 );
 
@@ -907,6 +951,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         if ((startElementId || endElementId) && !elementProps.points) {
           (element as any).points = [[0, 0], [100, 0]];
         }
+
+        // Fill in default dimensions for shapes when the AI omitted them
+        applyDefaultSize(element);
 
         // Convert text to label format for Excalidraw
         const excalidrawElement = convertTextToLabel(element);
@@ -1419,6 +1466,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
             (element as any).points = [[0, 0], [100, 0]];
           }
 
+          applyDefaultSize(element);
           const excalidrawElement = convertTextToLabel(element);
           createdElements.push(excalidrawElement);
         }
