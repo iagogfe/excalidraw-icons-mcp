@@ -456,7 +456,10 @@ function App(): JSX.Element {
 
       switch (data.type) {
         case 'initial_elements':
-          if (data.elements && data.elements.length > 0) {
+          // Skip the (expensive) convert+apply if loadExistingElements already
+          // populated the scene — the two paths race on open and doing both
+          // means converting the whole scene twice.
+          if (data.elements && data.elements.length > 0 && currentElements.length === 0) {
             const cleanedElements = data.elements.map(cleanElementForExcalidraw)
             const convertedElements = convertElementsPreservingImageProps(cleanedElements)
             applySceneUpdateWithoutAutoSync(excalidrawAPI, {
