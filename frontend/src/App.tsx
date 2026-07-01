@@ -347,13 +347,10 @@ function App(): JSX.Element {
   useEffect(() => {
     if (excalidrawAPI) {
       loadExistingElements()
-
-      // Ensure WebSocket is connected for real-time updates
-      if (!isConnected) {
-        connectWebSocket()
-      }
     }
-  }, [excalidrawAPI, isConnected])
+    // WebSocket is already established by the mount effect above; the server
+    // pushes `initial_elements` on connect, so no extra load is needed here.
+  }, [excalidrawAPI])
 
   const loadExistingElements = async (): Promise<void> => {
     try {
@@ -395,10 +392,8 @@ function App(): JSX.Element {
 
     websocketRef.current.onopen = () => {
       setIsConnected(true)
-
-      if (excalidrawAPI) {
-        setTimeout(loadExistingElements, 100)
-      }
+      // Elements arrive via the server's `initial_elements` push on connect and
+      // the one-shot loadExistingElements effect — no redundant fetch here.
     }
 
     websocketRef.current.onmessage = (event: MessageEvent) => {
