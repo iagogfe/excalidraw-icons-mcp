@@ -356,8 +356,18 @@ function App(): JSX.Element {
   // bundle init instead of starting only after the API becomes available.
   const elementsPrefetchRef = useRef<Promise<ApiResponse> | null>(null)
   useEffect(() => {
+    // Prefetch AND pre-convert during mount: the convert is pure CPU (no API
+    // needed), so running it as soon as the data lands takes it off the critical
+    // path — by the time the Excalidraw API is ready we only updateScene.
     elementsPrefetchRef.current = fetch('/api/elements')
       .then(r => r.json() as Promise<ApiResponse>)
+      .then((result) => {
+        if (result.success && result.elements && result.elements.length > 0) {
+          const cleaned = result.elements.map(cleanElementForExcalidraw)
+          ;(result as any).__converted = convertElementsPreservingImageProps(cleaned)
+        }
+        return result
+      })
       .catch(() => ({ success: false } as ApiResponse))
   }, [])
 
@@ -369,8 +379,8 @@ function App(): JSX.Element {
       elementsPrefetchRef.current = null
 
       if (result.success && result.elements && result.elements.length > 0) {
-        const cleanedElements = result.elements.map(cleanElementForExcalidraw)
-        const convertedElements = convertElementsPreservingImageProps(cleanedElements)
+        const convertedElements = (result as any).__converted
+          ?? convertElementsPreservingImageProps(result.elements.map(cleanElementForExcalidraw))
         if (excalidrawAPI) {
           applySceneUpdateWithoutAutoSync(excalidrawAPI, {
             elements: convertedElements,
