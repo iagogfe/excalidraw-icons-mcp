@@ -28,6 +28,7 @@ import {
   validateElement,
   normalizeFontFamily
 } from './types.js';
+import { autoLayout, detectLayoutIssues, LayoutElement } from './layout.js';
 import fetch from 'node-fetch';
 
 // Load environment variables
@@ -387,6 +388,8 @@ SPACING (never overlap, avoid cramped layouts):
 
 WORKFLOW:
 - Plan all coordinates upfront, then create everything in ONE batch_create_elements call instead of many create_element calls.
+- For graph/flow/architecture diagrams, prefer batch_create_elements with autoLayout:true — it auto-arranges nodes (removes overlaps, enforces spacing, minimizes arrow crossings) so you don't have to hand-tune coordinates.
+- After drawing, call validate_layout to check for overlaps, cramped spacing, off-screen elements, oversized labels, and crossing arrows; then fix the reported elements.
 - Before modifying an existing canvas, call describe_scene to read current elements and the bounding box so new elements do not collide with them.
 - Bind arrows with startElementId/endElementId (auto-routes to shape edges) instead of manual points.
 - Give shapes a custom id so arrows in the same batch can reference them.
@@ -684,6 +687,10 @@ const tools: Tool[] = [
             },
             required: ['type', 'x', 'y']
           }
+        },
+        autoLayout: {
+          type: 'boolean',
+          description: 'When true, automatically arrange the created elements before rendering: enforce minimum sizes, remove overlaps, guarantee spacing (40px gaps, 80px between arrow-connected shapes), and minimize arrow crossings. Use for graph/flow/architecture diagrams when you have not hand-placed coordinates.'
         }
       },
       required: ['elements']
@@ -876,6 +883,14 @@ const tools: Tool[] = [
           description: 'Vertical scroll offset'
         }
       }
+    }
+  },
+  {
+    name: 'validate_layout',
+    description: 'Check the current canvas for layout problems: overlapping shapes, cramped spacing (<40px), off-screen/negative positions, labels too big for their shape, arrows shorter than 80px, and crossing arrows. Returns a scored list of issues with the element IDs involved. Call this after drawing to verify the diagram is clean, then fix the reported elements (or re-create with batch_create_elements autoLayout:true).',
+    inputSchema: {
+      type: 'object',
+      properties: {}
     }
   }
 ];
@@ -1436,8 +1451,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       }
       
       case 'batch_create_elements': {
-        const params = z.object({ elements: z.array(ElementSchema) }).parse(args);
-        logger.info('Batch creating elements via MCP', { count: params.elements.length });
+        const params = z.object({ elements: z.array(ElementSchema), autoLayout: z.boolean().optional() }).parse(args);
+        logger.info('Batch creating elements via MCP', { count: params.elements.length, autoLayout: !!params.autoLayout });
 
         const createdElements: ServerElement[] = [];
 
@@ -1469,6 +1484,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           applyDefaultSize(element);
           const excalidrawElement = convertTextToLabel(element);
           createdElements.push(excalidrawElement);
+        }
+
+        // Optionally auto-arrange: remove overlaps, enforce spacing, minimize crossings
+        if (params.autoLayout) {
+          autoLayout(createdElements as unknown as LayoutElement[]);
+          logger.info('Applied auto-layout to batch elements');
         }
 
         const canvasElements = await batchCreateElementsOnCanvas(createdElements);
@@ -2282,6 +2303,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
             text: `Viewport updated successfully.\n\n${JSON.stringify(viewportResult, null, 2)}`
           }]
         };
+      }
+
+      case 'validate_layout': {
+        logger.info('Validating layout via MCP');
+
+        const response = await fetch(`${EXPRESS_SERVER_URL}/api/elements`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch elements: ${response.status}`);
+        }
+        const data = await response.json() as ApiResponse;
+        const allElements = (data.elements || []) as unknown as LayoutElement[];
+
+        if (allElements.length === 0) {
+          return { content: [{ type: 'text', text: 'The canvas is empty — nothing to validate.' }] };
+        }
+
+        const { score, issues } = detectLayoutIssues(allElements);
+
+        if (issues.length === 0) {
+          return { content: [{ type: 'text', text: `✅ Layout looks clean (score 0). ${allElements.length} elements, no overlaps, spacing, sizing, or crossing issues detected.` }] };
+        }
+
+        const byType: Record<string, number> = {};
+        for (const it of issues) byType[it.type] = (byType[it.type] || 0) + 1;
+
+        const lines: string[] = [];
+        lines.push(`Layout score: ${score} (lower is better) — ${issues.length} issue(s) found`);
+        lines.push(`Summary: ${Object.entries(byType).map(([t, c]) => `${t}(${c})`).join(', ')}`);
+        lines.push('');
+        for (const it of issues.slice(0, 60)) {
+          lines.push(`  [${it.severity}] ${it.type}: ${it.detail}  → elements: ${it.elementIds.join(', ')}`);
+        }
+        if (issues.length > 60) lines.push(`  ...and ${issues.length - 60} more`);
+        lines.push('');
+        lines.push('Fix the listed elements (adjust size/position), or re-create the diagram with batch_create_elements autoLayout:true to auto-arrange.');
+
+        return { content: [{ type: 'text', text: lines.join('\n') }] };
       }
 
       default:
