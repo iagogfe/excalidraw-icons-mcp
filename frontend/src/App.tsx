@@ -352,10 +352,21 @@ function App(): JSX.Element {
     // pushes `initial_elements` on connect, so no extra load is needed here.
   }, [excalidrawAPI])
 
+  // Kicked off on mount so the network round-trip overlaps the (heavy) Excalidraw
+  // bundle init instead of starting only after the API becomes available.
+  const elementsPrefetchRef = useRef<Promise<ApiResponse> | null>(null)
+  useEffect(() => {
+    elementsPrefetchRef.current = fetch('/api/elements')
+      .then(r => r.json() as Promise<ApiResponse>)
+      .catch(() => ({ success: false } as ApiResponse))
+  }, [])
+
   const loadExistingElements = async (): Promise<void> => {
     try {
-      const response = await fetch('/api/elements')
-      const result: ApiResponse = await response.json()
+      const result: ApiResponse = await (
+        elementsPrefetchRef.current ?? fetch('/api/elements').then(r => r.json())
+      )
+      elementsPrefetchRef.current = null
 
       if (result.success && result.elements && result.elements.length > 0) {
         const cleanedElements = result.elements.map(cleanElementForExcalidraw)
