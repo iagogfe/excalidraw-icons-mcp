@@ -84,6 +84,11 @@ test('searchItems matches item names, skips unnamed', () => {
   assert.equal(hits[0].ref, 's/x.excalidrawlib#0');
   assert.equal(hits[0].elementCount, 3);
   assert.equal(searchItems(lib, { source: 's/x.excalidrawlib', name: 'X' }, 5, 'zzz').length, 0);
+  // unnamed items must be skipped even when their elements would match
+  const unnamedLib = { type: 'excalidrawlib', version: 2, libraryItems: [
+    { status: 'published', elements: [{ id: 'u1', type: 'rectangle', x: 0, y: 0, width: 10, height: 10 }] }
+  ] };
+  assert.equal(searchItems(unnamedLib, { source: 'u/u.excalidrawlib', name: 'U' }, 0, 'rectangle').length, 0);
 });
 
 test('curated set covers the main technical domains', () => {
