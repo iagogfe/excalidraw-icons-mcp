@@ -1,0 +1,24 @@
+{
+  "type": "excalidrawlib",
+  "version": 2,
+  "libraryItems": [
+    {
+      "id": "item1",
+      "status": "published",
+      "name": "Test DB",
+      "elements": [
+        { "id": "el1", "type": "rectangle", "x": 100, "y": 200, "width": 200, "height": 100, "angle": 0, "groupIds": ["gA"], "boundElements": [{ "id": "el2", "type": "text" }] },
+        { "id": "el2", "type": "text", "x": 150, "y": 230, "width": 100, "height": 40, "fontSize": 20, "text": "DB", "containerId": "el1", "groupIds": ["gA"] },
+        { "id": "el3", "type": "line", "x": 100, "y": 320, "width": 200, "height": 0, "points": [[0, 0], [200, 0]], "groupIds": ["gA"] }
+      ]
+    },
+    {
+      "id": "item2",
+      "status": "published",
+      "name": "Image Item",
+      "elements": [
+        { "id": "el4", "type": "image", "x": 0, "y": 0, "width": 50, "height": 50, "fileId": "f1" }
+      ]
+    }
+  ]
+}

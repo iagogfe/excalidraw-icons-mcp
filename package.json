@@ -19,6 +19,7 @@
     "production": "npm run build && npm run canvas",
     "prepublishOnly": "npm run build",
     "test:bind": "npm run build:server && node scripts/check-local-bind.mjs",
+    "test:libraries": "npm run build:server && node scripts/test-libraries.mjs",
     "type-check": "npx tsc --noEmit"
   },
   "dependencies": {
