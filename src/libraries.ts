@@ -127,3 +127,69 @@ export function instantiateLibraryItem(item: LibraryItem, x: number, y: number, 
     bbox: { x, y, width: (maxX - minX) * scale, height: (maxY - minY) * scale }
   };
 }
+
+// ---- Search ----
+
+// Curated libraries highlighted for technical diagrams. Keys are manifest
+// `source` values (verified against the live manifest); values are the domain
+// keywords that should pull the library into an item-level search.
+export const CURATED_LIBRARIES: Record<string, string[]> = {
+  'childishgirl/aws-architecture-icons.excalidrawlib': ['aws', 'rds', 's3', 'ec2', 'dynamodb', 'cloud'],
+  'stojanovic/aws-serverless-icons-v2.excalidrawlib': ['aws', 'serverless', 'lambda'],
+  'youritjang/azure-cloud-services.excalidrawlib': ['azure', 'cloud'],
+  'clementbosc/gcp-icons.excalidrawlib': ['gcp', 'google cloud', 'bigquery', 'cloud'],
+  'rohanp/system-design.excalidrawlib': ['system design', 'queue', 'cache', 'load balancer', 'database'],
+  'youritjang/software-architecture.excalidrawlib': ['architecture', 'service', 'database', 'user'],
+  'BjoernKW/UML-ER-library.excalidrawlib': ['uml', 'er', 'entity', 'class diagram'],
+  'dwelle/network-topology-icons.excalidrawlib': ['network', 'router', 'firewall', 'switch'],
+  'markopolo123/dev_ops.excalidrawlib': ['devops', 'ci', 'docker', 'kubernetes']
+};
+
+/** "author/name.excalidrawlib" -> "author-name" (the key format of stats.json). */
+export function statsKey(source: string): string {
+  return source.replace(/\.excalidrawlib$/i, '').replace(/\//g, '-');
+}
+
+const tokenize = (q: string): string[] => q.toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length >= 2);
+
+/** Match query tokens against library name+description; rank by total downloads. */
+export function searchManifest(
+  manifest: LibraryManifestEntry[],
+  stats: Record<string, { total: number }>,
+  query: string
+): Array<LibraryManifestEntry & { downloads: number }> {
+  const tokens = tokenize(query);
+  if (tokens.length === 0) return [];
+  return manifest
+    .filter(e => {
+      const hay = `${e.name} ${e.description}`.toLowerCase();
+      return tokens.some(t => hay.includes(t));
+    })
+    .map(e => ({ ...e, downloads: stats[statsKey(e.source)]?.total ?? 0 }))
+    .sort((a, b) => b.downloads - a.downloads);
+}
+
+/** Match query tokens against item names inside one downloaded library. */
+export function searchItems(
+  lib: ExcalidrawLibrary,
+  entry: { source: string; name: string },
+  downloads: number,
+  query: string
+): SearchResult[] {
+  const tokens = tokenize(query);
+  const out: SearchResult[] = [];
+  (lib.libraryItems || []).forEach((item, i) => {
+    if (!item.name) return;
+    const name = item.name.toLowerCase();
+    if (tokens.some(t => name.includes(t))) {
+      out.push({
+        ref: `${entry.source}#${i}`,
+        itemName: item.name,
+        libraryName: entry.name,
+        downloads,
+        elementCount: (item.elements || []).length
+      });
+    }
+  });
+  return out;
+}

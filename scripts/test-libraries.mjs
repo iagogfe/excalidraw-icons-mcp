@@ -1,7 +1,7 @@
 // Unit tests for dist/libraries.js — no network. Run: npm run test:libraries
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { instantiateLibraryItem } from '../dist/libraries.js';
+import { instantiateLibraryItem, statsKey, searchManifest, searchItems, CURATED_LIBRARIES } from '../dist/libraries.js';
 
 const lib = JSON.parse(fs.readFileSync(new URL('./fixtures/test-library.excalidrawlib', import.meta.url), 'utf8'));
 const dbItem = lib.libraryItems[0];
@@ -57,6 +57,38 @@ test('anchor is the largest shape element', () => {
 
 test('image items are rejected', () => {
   assert.throws(() => instantiateLibraryItem(imgItem, 0, 0), /image/i);
+});
+
+test('statsKey converts source to stats.json key', () => {
+  assert.equal(statsKey('childishgirl/aws-architecture-icons.excalidrawlib'), 'childishgirl-aws-architecture-icons');
+});
+
+test('searchManifest ranks matches by downloads', () => {
+  const manifest = [
+    { name: 'AWS Architecture Icons', description: 'aws icons', source: 'a/aws.excalidrawlib', version: 1, id: '1' },
+    { name: 'Stick figures', description: 'people', source: 'b/stick.excalidrawlib', version: 1, id: '2' },
+    { name: 'AWS Serverless', description: 'lambda etc', source: 'c/aws-sls.excalidrawlib', version: 1, id: '3' }
+  ];
+  const stats = { 'a-aws': { total: 100 }, 'c-aws-sls': { total: 900 } };
+  const hits = searchManifest(manifest, stats, 'aws');
+  assert.equal(hits.length, 2);
+  assert.equal(hits[0].source, 'c/aws-sls.excalidrawlib'); // more downloads first
+  assert.equal(hits[0].downloads, 900);
+});
+
+test('searchItems matches item names, skips unnamed', () => {
+  const lib = JSON.parse(fs.readFileSync(new URL('./fixtures/test-library.excalidrawlib', import.meta.url), 'utf8'));
+  const hits = searchItems(lib, { source: 's/x.excalidrawlib', name: 'X' }, 5, 'db');
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].itemName, 'Test DB');
+  assert.equal(hits[0].ref, 's/x.excalidrawlib#0');
+  assert.equal(hits[0].elementCount, 3);
+  assert.equal(searchItems(lib, { source: 's/x.excalidrawlib', name: 'X' }, 5, 'zzz').length, 0);
+});
+
+test('curated set covers the main technical domains', () => {
+  const all = Object.values(CURATED_LIBRARIES).flat().join(' ');
+  for (const kw of ['aws', 'azure', 'gcp', 'uml', 'network']) assert.ok(all.includes(kw), kw);
 });
 
 console.log(`\n${passed} tests passed`);
