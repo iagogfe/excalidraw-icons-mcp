@@ -66,3 +66,10 @@ Append to `MCP_INSTRUCTIONS`:
 
 - Items with embedded images (`type: image` + files).
 - Private libraries; publishing libraries; frontend UI for library browsing.
+
+## Deviation (implementation)
+
+"Canvas server untouched" was relaxed by one minimal change: `CreateElementSchema`
+in `src/server.ts` gained `.passthrough()`. The zod default (strip) removed
+library-element props (`angle`, `containerId`, `textAlign`, …), breaking icon
+fidelity. No endpoint or behavior changes beyond preserving unknown props.
