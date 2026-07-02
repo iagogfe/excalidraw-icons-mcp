@@ -926,9 +926,9 @@ const tools: Tool[] = [
 // Initialize MCP server
 const server = new Server(
   {
-    name: "mcp-excalidraw-server",
+    name: "iconcanvas-mcp",
     version: "2.0.0",
-    description: "Programmatic canvas toolkit for Excalidraw with file I/O, image export, and real-time sync"
+    description: "Programmatic canvas toolkit with precise auto-layout and a real icon library for agent-built diagrams/UI"
   },
   {
     capabilities: {
@@ -1609,7 +1609,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         const excalidrawScene: any = {
           type: 'excalidraw',
           version: 2,
-          source: 'mcp-excalidraw-server',
+          source: 'iconcanvas-mcp',
           elements: sceneElements,
           appState: {
             viewBackgroundColor: '#ffffff',
