@@ -7,6 +7,8 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import fetch from 'node-fetch';
+import logger from './utils/logger.js';
 import { generateId } from './types.js';
 
 export interface LibraryManifestEntry {
@@ -192,4 +194,120 @@ export function searchItems(
     }
   });
   return out;
+}
+
+// ---- I/O: disk cache + fetch ----
+
+const LIBRARIES_BASE = 'https://libraries.excalidraw.com';
+const MANIFEST_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+export function getCacheDir(): string {
+  return process.env.EXCALIDRAW_LIBRARY_CACHE_DIR || path.join(os.homedir(), '.cache', 'mcp-excalidraw', 'libraries');
+}
+
+async function fetchJson(url: string): Promise<any> {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Fetch failed: ${resp.status} ${resp.statusText} for ${url}`);
+  return resp.json();
+}
+
+function readCacheFile(fileName: string): { data: any; ageMs: number } | null {
+  const fp = path.join(getCacheDir(), fileName);
+  if (!fs.existsSync(fp)) return null;
+  try {
+    return { data: JSON.parse(fs.readFileSync(fp, 'utf8')), ageMs: Date.now() - fs.statSync(fp).mtimeMs };
+  } catch {
+    return null; // malformed cache — treat as absent
+  }
+}
+
+function writeCacheFile(fileName: string, data: any): void {
+  fs.mkdirSync(getCacheDir(), { recursive: true });
+  fs.writeFileSync(path.join(getCacheDir(), fileName), JSON.stringify(data));
+}
+
+/** TTL'd fetch-through cache; falls back to stale cache when offline. */
+async function cachedFetch(fileName: string, url: string, ttlMs: number): Promise<any> {
+  const cached = readCacheFile(fileName);
+  if (cached && cached.ageMs < ttlMs) return cached.data;
+  try {
+    const data = await fetchJson(url);
+    writeCacheFile(fileName, data);
+    return data;
+  } catch (err) {
+    if (cached) return cached.data; // stale-if-offline
+    throw new Error(`Cannot reach ${url} and no local cache exists yet. Check your network and retry. (${(err as Error).message})`);
+  }
+}
+
+export async function getManifest(): Promise<LibraryManifestEntry[]> {
+  return cachedFetch('manifest.json', `${LIBRARIES_BASE}/libraries.json`, MANIFEST_TTL_MS);
+}
+
+export async function getStats(): Promise<Record<string, { total: number }>> {
+  return cachedFetch('stats.json', `${LIBRARIES_BASE}/stats.json`, MANIFEST_TTL_MS);
+}
+
+/** Load one library; cached indefinitely, refetched when the manifest version changes. */
+export async function loadLibrary(entry: LibraryManifestEntry): Promise<ExcalidrawLibrary> {
+  const fileName = `lib-${statsKey(entry.source)}.json`;
+  const cached = readCacheFile(fileName);
+  if (cached && cached.data?.manifestVersion === entry.version) return cached.data.library;
+  const library = await fetchJson(`${LIBRARIES_BASE}/libraries/${entry.source}`) as ExcalidrawLibrary;
+  writeCacheFile(fileName, { manifestVersion: entry.version, library });
+  return library;
+}
+
+function isLibraryCached(source: string): boolean {
+  return fs.existsSync(path.join(getCacheDir(), `lib-${statsKey(source)}.json`));
+}
+
+/**
+ * Search flow: match libraries in the manifest, then search item names inside
+ * curated-domain matches, already-cached libraries, and the top manifest hits.
+ */
+export async function searchLibraryItems(query: string, limit = 10): Promise<SearchResult[]> {
+  const [manifest, stats] = await Promise.all([getManifest(), getStats()]);
+  const libHits = searchManifest(manifest, stats, query);
+  const bySource = new Map(manifest.map(e => [e.source, e]));
+
+  const tokens = query.toLowerCase();
+  const curatedHits = Object.entries(CURATED_LIBRARIES)
+    .filter(([, keywords]) => keywords.some(k => tokens.includes(k)))
+    .map(([source]) => bySource.get(source))
+    .filter((e): e is LibraryManifestEntry => !!e);
+
+  // Libraries whose items we search: curated domain hits + cached matches + top-3 matches
+  const toSearch = new Map<string, LibraryManifestEntry>();
+  for (const e of curatedHits) toSearch.set(e.source, e);
+  for (const e of libHits.filter(h => isLibraryCached(h.source))) toSearch.set(e.source, e);
+  for (const e of libHits.slice(0, 3)) toSearch.set(e.source, e);
+
+  const results: SearchResult[] = [];
+  for (const entry of toSearch.values()) {
+    try {
+      const lib = await loadLibrary(entry);
+      const downloads = stats[statsKey(entry.source)]?.total ?? 0;
+      results.push(...searchItems(lib, entry, downloads, query));
+    } catch (err) {
+      logger.warn(`Skipping library ${entry.source}: ${(err as Error).message}`);
+    }
+  }
+  results.sort((a, b) => b.downloads - a.downloads);
+  return results.slice(0, limit);
+}
+
+/** Resolve a "<source>#<index>" ref back to the concrete library item. */
+export async function getItemByRef(ref: string): Promise<{ item: LibraryItem; entry: LibraryManifestEntry }> {
+  const hash = ref.lastIndexOf('#');
+  if (hash < 1) throw new Error(`Invalid ref "${ref}" — expected "<source>#<itemIndex>" from search_library_items.`);
+  const source = ref.slice(0, hash);
+  const index = Number(ref.slice(hash + 1));
+  const manifest = await getManifest();
+  const entry = manifest.find(e => e.source === source);
+  if (!entry) throw new Error(`Library "${source}" not found in the manifest — run search_library_items again.`);
+  const lib = await loadLibrary(entry);
+  const item = lib.libraryItems?.[index];
+  if (!item) throw new Error(`Item index ${index} not found in "${source}" (has ${lib.libraryItems?.length ?? 0} items).`);
+  return { item, entry };
 }

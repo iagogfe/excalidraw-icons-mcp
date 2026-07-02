@@ -1,13 +1,16 @@
 // Unit tests for dist/libraries.js — no network. Run: npm run test:libraries
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { instantiateLibraryItem, statsKey, searchManifest, searchItems, CURATED_LIBRARIES } from '../dist/libraries.js';
+import os from 'node:os';
+import path from 'node:path';
+import { instantiateLibraryItem, statsKey, searchManifest, searchItems, CURATED_LIBRARIES, getManifest, getStats, loadLibrary, searchLibraryItems, getItemByRef } from '../dist/libraries.js';
 
 const lib = JSON.parse(fs.readFileSync(new URL('./fixtures/test-library.excalidrawlib', import.meta.url), 'utf8'));
 const dbItem = lib.libraryItems[0];
 const imgItem = lib.libraryItems[1];
 let passed = 0;
-const test = (name, fn) => { fn(); passed++; console.log(`ok - ${name}`); };
+const tests = [];
+const test = (name, fn) => tests.push([name, fn]);
 
 test('instantiate places bbox at target position', () => {
   const r = instantiateLibraryItem(dbItem, 500, 600);
@@ -96,4 +99,34 @@ test('curated set covers the main technical domains', () => {
   for (const kw of ['aws', 'azure', 'gcp', 'uml', 'network']) assert.ok(all.includes(kw), kw);
 });
 
+const tmpCache = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-exca-libtest-'));
+process.env.EXCALIDRAW_LIBRARY_CACHE_DIR = tmpCache;
+const fixtureLib = JSON.parse(fs.readFileSync(new URL('./fixtures/test-library.excalidrawlib', import.meta.url), 'utf8'));
+const manifestFixture = [{ name: 'Test Library', description: 'aws test icons', source: 'tester/test-lib.excalidrawlib', version: 3, id: 't1' }];
+fs.writeFileSync(path.join(tmpCache, 'manifest.json'), JSON.stringify(manifestFixture));
+fs.writeFileSync(path.join(tmpCache, 'stats.json'), JSON.stringify({ 'tester-test-lib': { total: 42 } }));
+fs.writeFileSync(path.join(tmpCache, 'lib-tester-test-lib.json'), JSON.stringify({ manifestVersion: 3, library: fixtureLib }));
+
+test('getManifest/getStats read from fresh cache without network', async () => {
+  assert.deepEqual(await getManifest(), manifestFixture);
+  assert.equal((await getStats())['tester-test-lib'].total, 42);
+});
+
+test('loadLibrary returns cached lib when manifest version matches', async () => {
+  const lib = await loadLibrary(manifestFixture[0]);
+  assert.equal(lib.libraryItems.length, 2);
+});
+
+test('searchLibraryItems finds items across cached libraries', async () => {
+  const results = await searchLibraryItems('test db');
+  assert.ok(results.some(r => r.itemName === 'Test DB' && r.ref === 'tester/test-lib.excalidrawlib#0'));
+});
+
+test('getItemByRef resolves and rejects bad refs', async () => {
+  const { item } = await getItemByRef('tester/test-lib.excalidrawlib#0');
+  assert.equal(item.name, 'Test DB');
+  await assert.rejects(() => getItemByRef('nope/missing.excalidrawlib#0'), /not found/i);
+});
+
+for (const [name, fn] of tests) { await fn(); passed++; console.log(`ok - ${name}`); }
 console.log(`\n${passed} tests passed`);
