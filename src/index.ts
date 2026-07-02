@@ -160,7 +160,7 @@ async function deleteElementOnCanvas(elementId: string): Promise<any> {
 // Helper to sync batch creation to canvas
 async function batchCreateElementsOnCanvas(elementsData: ServerElement[]): Promise<ServerElement[] | null> {
   const result = await syncToCanvas('batch_create', elementsData);
-  return result?.elements || elementsData;
+  return result?.elements ?? null;
 }
 
 // Helper to fetch element from canvas
@@ -1683,6 +1683,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         }));
 
         const canvasElements = await batchCreateElementsOnCanvas(elementsToCreate);
+        if (!canvasElements) {
+          throw new Error('Failed to import scene: canvas server unavailable');
+        }
 
         // Import files if present (for image elements)
         let importedFileCount = 0;
@@ -1797,6 +1800,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         }
 
         const canvasElements = await batchCreateElementsOnCanvas(duplicates);
+        if (!canvasElements) {
+          throw new Error('Failed to duplicate elements: canvas server unavailable');
+        }
 
         return {
           content: [{
@@ -1847,6 +1853,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
         // Restore elements
         const canvasElements = await batchCreateElementsOnCanvas(data.snapshot.elements);
+        if (!canvasElements) {
+          throw new Error('Failed to restore snapshot: canvas server unavailable');
+        }
 
         return {
           content: [{

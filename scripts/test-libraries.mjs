@@ -128,5 +128,15 @@ test('getItemByRef resolves and rejects bad refs', async () => {
   await assert.rejects(() => getItemByRef('nope/missing.excalidrawlib#0'), /not found/i);
 });
 
+test('getItemByRef rejects truncated/garbage index suffixes', async () => {
+  await assert.rejects(() => getItemByRef('tester/test-lib.excalidrawlib#'), /invalid ref/i);
+  await assert.rejects(() => getItemByRef('tester/test-lib.excalidrawlib#abc'), /invalid ref/i);
+});
+
+test('searchLibraryItems returns no results for a nonsense query', async () => {
+  const results = await searchLibraryItems('zzznothing');
+  assert.deepEqual(results, []);
+});
+
 for (const [name, fn] of tests) { await fn(); passed++; console.log(`ok - ${name}`); }
 console.log(`\n${passed} tests passed`);

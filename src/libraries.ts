@@ -271,9 +271,12 @@ export async function searchLibraryItems(query: string, limit = 10): Promise<Sea
   const libHits = searchManifest(manifest, stats, query);
   const bySource = new Map(manifest.map(e => [e.source, e]));
 
-  const tokens = query.toLowerCase();
+  const queryLower = query.toLowerCase();
+  const queryTokens = new Set(tokenize(query));
   const curatedHits = Object.entries(CURATED_LIBRARIES)
-    .filter(([, keywords]) => keywords.some(k => tokens.includes(k)))
+    .filter(([, keywords]) => keywords.some(k =>
+      k.includes(' ') ? queryLower.includes(k) : queryTokens.has(k)
+    ))
     .map(([source]) => bySource.get(source))
     .filter((e): e is LibraryManifestEntry => !!e);
 
@@ -302,7 +305,11 @@ export async function getItemByRef(ref: string): Promise<{ item: LibraryItem; en
   const hash = ref.lastIndexOf('#');
   if (hash < 1) throw new Error(`Invalid ref "${ref}" — expected "<source>#<itemIndex>" from search_library_items.`);
   const source = ref.slice(0, hash);
-  const index = Number(ref.slice(hash + 1));
+  const idxStr = ref.slice(hash + 1);
+  if (!/^\d+$/.test(idxStr)) {
+    throw new Error(`Invalid ref "${ref}" — expected "<source>#<itemIndex>" from search_library_items.`);
+  }
+  const index = Number(idxStr);
   const manifest = await getManifest();
   const entry = manifest.find(e => e.source === source);
   if (!entry) throw new Error(`Library "${source}" not found in the manifest — run search_library_items again.`);
