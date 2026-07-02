@@ -1,11 +1,11 @@
 {
-  "name": "iconcanvas-mcp",
+  "name": "excalidraw-icons-mcp",
   "version": "1.0.7",
-  "description": "MCP server for agent-built diagrams/UI with precise auto-layout and a real icon library",
+  "description": "Faster Excalidraw MCP server with real icon/library search and insertion for agent-built diagrams",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "iconcanvas-mcp": "dist/index.js"
+    "excalidraw-icons-mcp": "dist/index.js"
   },
   "scripts": {
     "start": "npm run build:server && node dist/index.js",
@@ -72,11 +72,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/iagogfe/iconcanvas-mcp.git"
+    "url": "https://github.com/iagogfe/excalidraw-icons-mcp.git"
   },
-  "homepage": "https://github.com/iagogfe/iconcanvas-mcp#readme",
+  "homepage": "https://github.com/iagogfe/excalidraw-icons-mcp#readme",
   "bugs": {
-    "url": "https://github.com/iagogfe/iconcanvas-mcp/issues"
+    "url": "https://github.com/iagogfe/excalidraw-icons-mcp/issues"
   },
   "engines": {
     "node": ">=18.0.0"
