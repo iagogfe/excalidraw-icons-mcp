@@ -29,6 +29,7 @@ import {
   normalizeFontFamily
 } from './types.js';
 import { autoLayout, detectLayoutIssues, LayoutElement } from './layout.js';
+import { searchLibraryItems, getItemByRef, instantiateLibraryItem } from './libraries.js';
 import fetch from 'node-fetch';
 
 // Load environment variables
@@ -389,6 +390,7 @@ SPACING (never overlap, avoid cramped layouts):
 WORKFLOW:
 - Plan all coordinates upfront, then create everything in ONE batch_create_elements call instead of many create_element calls.
 - For graph/flow/architecture diagrams, prefer batch_create_elements with autoLayout:true — it auto-arranges nodes (removes overlaps, enforces spacing, minimizes arrow crossings) so you don't have to hand-tune coordinates.
+- For cloud infrastructure (AWS/Azure/GCP), UML, network, or system-design diagrams: call search_library_items first and insert official icons with insert_library_item instead of drawing generic shapes (e.g. an AWS database -> the RDS icon).
 - After drawing, call validate_layout to check for overlaps, cramped spacing, off-screen elements, oversized labels, and crossing arrows; then fix the reported elements.
 - Before modifying an existing canvas, call describe_scene to read current elements and the bounding box so new elements do not collide with them.
 - Bind arrows with startElementId/endElementId (auto-routes to shape edges) instead of manual points.
@@ -891,6 +893,32 @@ const tools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {}
+    }
+  },
+  {
+    name: 'search_library_items',
+    description: 'Search community Excalidraw libraries (libraries.excalidraw.com) for ready-made icons and shapes — AWS/Azure/GCP icons, UML, network, system-design components. Returns matching items with a ref to pass to insert_library_item. Use this BEFORE drawing generic shapes for cloud/infra diagrams (e.g. search "aws rds" for an AWS database icon).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What to look for, e.g. "aws rds", "lambda", "load balancer", "uml class"' },
+        limit: { type: 'number', description: 'Max results (default 10)' }
+      },
+      required: ['query']
+    }
+  },
+  {
+    name: 'insert_library_item',
+    description: 'Insert a library item (found via search_library_items) onto the canvas at (x, y). The item is placed as a grouped unit. Returns the created element ids, an anchorId you can use to bind arrows (startElementId/endElementId), and the bounding box for positioning labels.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ref: { type: 'string', description: 'Item ref from search_library_items, e.g. "author/lib.excalidrawlib#3"' },
+        x: { type: 'number', description: 'Target X for the item bounding-box origin' },
+        y: { type: 'number', description: 'Target Y for the item bounding-box origin' },
+        targetWidth: { type: 'number', description: 'Optional: scale the item uniformly to this width in px' }
+      },
+      required: ['ref', 'x', 'y']
     }
   }
 ];
@@ -2340,6 +2368,63 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         lines.push('Fix the listed elements (adjust size/position), or re-create the diagram with batch_create_elements autoLayout:true to auto-arrange.');
 
         return { content: [{ type: 'text', text: lines.join('\n') }] };
+      }
+
+      case 'search_library_items': {
+        const params = z.object({
+          query: z.string(),
+          limit: z.number().optional()
+        }).parse(args);
+        logger.info('Searching library items', { query: params.query });
+
+        const results = await searchLibraryItems(params.query, params.limit ?? 10);
+
+        if (results.length === 0) {
+          return {
+            content: [{
+              type: 'text',
+              text: `No library items matched "${params.query}". Try broader terms (e.g. "aws", "database", "network") or draw with basic shapes instead.`
+            }]
+          };
+        }
+
+        const lines = results.map(r =>
+          `  ${r.ref}\n    ${r.itemName} — ${r.libraryName} (${r.downloads.toLocaleString()} downloads, ${r.elementCount} elements)`
+        );
+        return {
+          content: [{
+            type: 'text',
+            text: `Found ${results.length} library item(s) for "${params.query}":\n\n${lines.join('\n')}\n\nInsert one with insert_library_item using its ref. Pass targetWidth (~120-200px for node icons) to normalize sizes.`
+          }]
+        };
+      }
+
+      case 'insert_library_item': {
+        const params = z.object({
+          ref: z.string(),
+          x: z.number(),
+          y: z.number(),
+          targetWidth: z.number().optional()
+        }).parse(args);
+        logger.info('Inserting library item', { ref: params.ref });
+
+        const { item } = await getItemByRef(params.ref);
+        const { elements, anchorId, bbox } = instantiateLibraryItem(item, params.x, params.y, params.targetWidth);
+
+        const canvasElements = await batchCreateElementsOnCanvas(elements as unknown as ServerElement[]);
+        if (!canvasElements) {
+          throw new Error('Failed to insert library item: HTTP server unavailable');
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: `Inserted "${item.name ?? params.ref}" (${elements.length} elements) at (${params.x}, ${params.y}).\n\n` +
+              `anchorId: ${anchorId} — bind arrows to it via startElementId/endElementId\n` +
+              `bbox: x=${Math.round(bbox.x)} y=${Math.round(bbox.y)} w=${Math.round(bbox.width)} h=${Math.round(bbox.height)} — keep >=40px clear around it\n` +
+              `elementIds: ${elements.map((e: any) => e.id).join(', ')}\n\n✅ Synced to canvas`
+          }]
+        };
       }
 
       default:
