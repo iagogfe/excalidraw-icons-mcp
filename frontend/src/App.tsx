@@ -745,13 +745,6 @@ function App(): JSX.Element {
     }
   }
 
-  // Data format conversion for backend
-  const convertToBackendFormat = (element: ExcalidrawElement): ServerElement => {
-    return {
-      ...element
-    } as ServerElement
-  }
-
   // Format sync time display
   const formatSyncTime = (time: Date | null): string => {
     if (!time) return ''
@@ -794,7 +787,7 @@ function App(): JSX.Element {
       const activeElements = currentElements.filter(el => !el.isDeleted)
 
       // 3. Convert to backend format
-      const backendElements = activeElements.map(convertToBackendFormat)
+      const backendElements = activeElements.map(el => ({ ...el } as ServerElement))
 
       // 4. Send to backend
       const response = await fetch('/api/elements/sync', {
