@@ -1,5 +1,4 @@
 import express, { Request, Response, NextFunction } from 'express';
-import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import net from 'net';
@@ -40,7 +39,6 @@ const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
 // Middleware
-app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // Serve static files from the build directory
