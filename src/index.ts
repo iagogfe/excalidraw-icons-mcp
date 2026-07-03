@@ -25,12 +25,10 @@ import {
   EXCALIDRAW_ELEMENT_TYPES,
   ServerElement,
   ExcalidrawElementType,
-  validateElement,
   normalizeFontFamily
 } from './types.js';
 import { autoLayout, detectLayoutIssues, LayoutElement } from './layout.js';
 import { searchLibraryItems, getItemByRef, instantiateLibraryItem } from './libraries.js';
-import fetch from 'node-fetch';
 
 // Load environment variables
 dotenv.config();

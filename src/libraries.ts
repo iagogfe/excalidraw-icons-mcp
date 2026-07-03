@@ -7,7 +7,6 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import fetch from 'node-fetch';
 import logger from './utils/logger.js';
 import { generateId } from './types.js';
 
