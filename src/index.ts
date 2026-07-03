@@ -29,6 +29,7 @@ import {
 } from './types.js';
 import { autoLayout, detectLayoutIssues, LayoutElement } from './layout.js';
 import { searchLibraryItems, getItemByRef, instantiateLibraryItem } from './libraries.js';
+import { searchOfficialIcons, resolveIconRef, recolorSvg } from './officialIcons.js';
 
 // Load environment variables
 dotenv.config();
@@ -62,10 +63,7 @@ interface ApiResponse {
   count?: number;
 }
 
-interface SyncResponse {
-  element?: ServerElement;
-  elements?: ServerElement[];
-}
+type SyncResponse = Pick<ApiResponse, 'element' | 'elements'>;
 
 // Helper functions to sync with Express server (canvas)
 async function syncToCanvas(operation: string, data: any): Promise<SyncResponse | null> {
@@ -137,22 +135,30 @@ async function syncToCanvas(operation: string, data: any): Promise<SyncResponse 
   }
 }
 
-// Helper to sync element creation to canvas
-async function createElementOnCanvas(elementData: ServerElement): Promise<ServerElement | null> {
-  const result = await syncToCanvas('create', elementData);
-  return result?.element || elementData;
+// Upload a file (image) to the canvas server so an image element can reference it via fileId
+async function uploadFile(id: string, dataURL: string, mimeType: string): Promise<boolean> {
+  if (!ENABLE_CANVAS_SYNC) return false;
+  try {
+    const response = await fetch(`${EXPRESS_SERVER_URL}/api/files`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: [{ id, dataURL, mimeType }] })
+    });
+    if (!response.ok) {
+      logger.warn(`File upload returned error status: ${response.status}`);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    logger.warn('File upload failed:', (error as Error).message);
+    return false;
+  }
 }
 
-// Helper to sync element update to canvas  
+// Helper to sync element update to canvas
 async function updateElementOnCanvas(elementData: Partial<ServerElement> & { id: string }): Promise<ServerElement | null> {
   const result = await syncToCanvas('update', elementData);
   return result?.element || null;
-}
-
-// Helper to sync element deletion to canvas
-async function deleteElementOnCanvas(elementId: string): Promise<any> {
-  const result = await syncToCanvas('delete', { id: elementId });
-  return result;
 }
 
 // Helper to sync batch creation to canvas
@@ -237,6 +243,25 @@ const ElementSchema = z.object({
   endElementId: z.string().optional(),
   endArrowhead: z.string().optional(),
   startArrowhead: z.string().optional(),
+  fileId: z.string().optional(),
+  status: z.string().optional(),
+  scale: z.tuple([z.number(), z.number()]).optional(),
+});
+
+const AddImageSchema = z.object({
+  id: z.string().optional(),
+  filePath: z.string().optional(),
+  data: z.string().optional(),
+  iconRef: z.string().optional(),
+  mimeType: z.string().optional(),
+  color: z.string().optional(),
+  x: z.number(),
+  y: z.number(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  targetWidth: z.number().optional(),
+}).refine(v => [v.filePath, v.data, v.iconRef].filter(Boolean).length === 1, {
+  message: 'Provide exactly one of filePath, data (base64, no data: prefix), or iconRef (from search_official_icon)'
 });
 
 const ElementIdSchema = z.object({
@@ -413,6 +438,66 @@ function applyDefaultSize<T extends { type: string; width?: number; height?: num
   return element;
 }
 
+// Build a ServerElement from parsed tool input: assign id, normalize points/fontFamily,
+// convert arrow binding ids to start/end, apply default sizes, convert text to label.
+// Shared by create_element and batch_create_elements so both stay in sync.
+function buildElement(params: z.infer<typeof ElementSchema>): ServerElement {
+  const { startElementId, endElementId, id: customId, ...elementProps } = params;
+  const id = customId || generateId();
+  const element: ServerElement = {
+    id,
+    ...elementProps,
+    points: elementProps.points ? normalizePoints(elementProps.points) : undefined,
+    // Convert binding IDs to Excalidraw's start/end format
+    ...(startElementId ? { start: { id: startElementId } } : {}),
+    ...(endElementId ? { end: { id: endElementId } } : {}),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    version: 1
+  };
+
+  // Normalize fontFamily from string names to numeric values
+  if (element.fontFamily !== undefined) {
+    element.fontFamily = normalizeFontFamily(element.fontFamily);
+  }
+
+  // For bound arrows without explicit points, set a default
+  if ((startElementId || endElementId) && !elementProps.points) {
+    (element as any).points = [[0, 0], [100, 0]];
+  }
+
+  applyDefaultSize(element);
+  return convertTextToLabel(element);
+}
+
+// Shared element property schema, used by create_element and batch_create_elements
+const ELEMENT_PROPERTIES = {
+  id: { type: 'string', description: 'Custom element ID. Arrows can reference this via startElementId/endElementId.' },
+  type: {
+    type: 'string',
+    enum: Object.values(EXCALIDRAW_ELEMENT_TYPES)
+  },
+  x: { type: 'number', description: 'Top-left X. Snap to a 20px grid; keep >=40px clear of neighboring shapes.' },
+  y: { type: 'number', description: 'Top-left Y. Snap to a 20px grid; keep >=40px clear of neighboring shapes.' },
+  width: { type: 'number', description: 'Shape width. Recommended: rectangle 160, diamond 140, ellipse 120. Minimum 120. Defaults applied if omitted.' },
+  height: { type: 'number', description: 'Shape height. Recommended: rectangle 80, diamond 100, ellipse 80. Minimum 60. Defaults applied if omitted.' },
+  backgroundColor: { type: 'string' },
+  strokeColor: { type: 'string' },
+  strokeWidth: { type: 'number' },
+  strokeStyle: { type: 'string', description: 'Stroke style: solid, dashed, dotted' },
+  roughness: { type: 'number' },
+  opacity: { type: 'number' },
+  text: { type: 'string' },
+  fontSize: { type: 'number' },
+  fontFamily: { type: ['string', 'number'], description: 'Font family: virgil/hand/handwritten (1), helvetica/sans/sans-serif (2), cascadia/mono/monospace (3), excalifont (5), nunito (6), lilita/lilita one (7), comic shanns/comic (8), or numeric ID' },
+  startElementId: { type: 'string', description: 'For arrows: ID of the element to bind the arrow start to. Arrow auto-routes to element edge.' },
+  endElementId: { type: 'string', description: 'For arrows: ID of the element to bind the arrow end to. Arrow auto-routes to element edge.' },
+  endArrowhead: { type: 'string', description: 'Arrowhead style at end: arrow, bar, dot, triangle, or null' },
+  startArrowhead: { type: 'string', description: 'Arrowhead style at start: arrow, bar, dot, triangle, or null' },
+  fileId: { type: 'string', description: 'For type:"image" elements: id of a file uploaded via add_image. Required to render the image.' },
+  scale: { type: 'array', description: 'For type:"image" elements: [scaleX, scaleY], usually [1, 1].' }
+} as const;
+
 // Tool definitions
 const tools: Tool[] = [
   {
@@ -420,31 +505,41 @@ const tools: Tool[] = [
     description: 'Create a new Excalidraw element. Always set width & height on shapes (min 120x60; typical rectangle 160x80). Leave a 40-80px gap from other elements to avoid overlap. Prefer batch_create_elements when adding more than one element. For arrows, use startElementId/endElementId to bind to shapes (auto-routes to edges).',
     inputSchema: {
       type: 'object',
-      properties: {
-        id: { type: 'string', description: 'Custom element ID (optional, auto-generated if omitted). Use with startElementId/endElementId in batch_create_elements.' },
-        type: {
-          type: 'string',
-          enum: Object.values(EXCALIDRAW_ELEMENT_TYPES)
-        },
-        x: { type: 'number', description: 'Top-left X. Snap to a 20px grid; keep >=40px clear of neighboring shapes.' },
-        y: { type: 'number', description: 'Top-left Y. Snap to a 20px grid; keep >=40px clear of neighboring shapes.' },
-        width: { type: 'number', description: 'Shape width. Recommended: rectangle 160, diamond 140, ellipse 120. Minimum 120. Defaults applied if omitted.' },
-        height: { type: 'number', description: 'Shape height. Recommended: rectangle 80, diamond 100, ellipse 80. Minimum 60. Defaults applied if omitted.' },
-        backgroundColor: { type: 'string' },
-        strokeColor: { type: 'string' },
-        strokeWidth: { type: 'number' },
-        strokeStyle: { type: 'string', description: 'Stroke style: solid, dashed, dotted' },
-        roughness: { type: 'number' },
-        opacity: { type: 'number' },
-        text: { type: 'string' },
-        fontSize: { type: 'number' },
-        fontFamily: { type: ['string', 'number'], description: 'Font family: virgil/hand/handwritten (1), helvetica/sans/sans-serif (2), cascadia/mono/monospace (3), excalifont (5), nunito (6), lilita/lilita one (7), comic shanns/comic (8), or numeric ID' },
-        startElementId: { type: 'string', description: 'For arrows: ID of the element to bind the arrow start to. Arrow auto-routes to element edge.' },
-        endElementId: { type: 'string', description: 'For arrows: ID of the element to bind the arrow end to. Arrow auto-routes to element edge.' },
-        endArrowhead: { type: 'string', description: 'Arrowhead style at end: arrow, bar, dot, triangle, or null' },
-        startArrowhead: { type: 'string', description: 'Arrowhead style at start: arrow, bar, dot, triangle, or null' }
-      },
+      properties: ELEMENT_PROPERTIES,
       required: ['type', 'x', 'y']
+    }
+  },
+  {
+    name: 'add_image',
+    description: 'Insert a raster/SVG image as an Excalidraw image element. Provide exactly one of: iconRef (from search_official_icon — preferred for standardized domain icons), filePath (local file), or data (base64 string, no "data:" prefix) plus mimeType. Uploads the file to the canvas server and creates a bound image element at (x, y). Use targetWidth to scale proportionally. Do not place a rectangle/ellipse behind the icon as a background — insert it standalone and put a text label below it instead.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Optional custom file id, also usable as the element reference.' },
+        iconRef: { type: 'string', description: 'ref returned by search_official_icon, e.g. "local:kubernetes/resources/pod.svg", "simple-icons:kubernetes", "tabler:router.svg", or "iconify:mdi:router". Mutually exclusive with filePath/data.' },
+        filePath: { type: 'string', description: 'Local path to an image file (svg/png/jpg). Mutually exclusive with iconRef/data.' },
+        data: { type: 'string', description: 'Base64-encoded image data, no "data:" prefix. Mutually exclusive with iconRef/filePath.' },
+        mimeType: { type: 'string', description: 'e.g. image/svg+xml, image/png. Inferred automatically for iconRef/filePath if omitted.' },
+        color: { type: 'string', description: 'Only for iconRef with single-color SVGs (tabler/simple-icons/most iconify sets): recolor the icon to this hex/CSS color, e.g. "#4a9eed". Has no effect on multi-color bundled icons (e.g. official Kubernetes SVGs) unless they use currentColor.' },
+        x: { type: 'number' },
+        y: { type: 'number' },
+        width: { type: 'number', description: 'Default 120 if omitted.' },
+        height: { type: 'number', description: 'Default 120 if omitted.' },
+        targetWidth: { type: 'number', description: 'Scale the image proportionally to this width.' }
+      },
+      required: ['x', 'y']
+    }
+  },
+  {
+    name: 'search_official_icon',
+    description: 'Search standardized icon libraries, local sources first then Iconify as a network fallback: bundled official Kubernetes icons (icons/kubernetes, Apache-2.0, from kubernetes/community), any locally-populated vendor packs under icons/<aws|azure|gcp|network|...> (drop the official zip contents there yourself — those vendors require manual license acceptance so they are not auto-fetched or redistributed), simple-icons (CC0, thousands of consistent monochrome brand/tech logos: AWS, Azure, GCP, Docker, databases, ML frameworks, etc), @tabler/icons (MIT, ~5000 consistent generic line icons for concepts with no brand — wifi, router, firewall, user, desktop/PC, server, cloud, shield/security, network), and Iconify (api.iconify.design, ~200k icons across hundreds of sets, fetched on demand and cached to disk — used only when nothing local matches; license shown per result). Prefer this over search_library_items (community libraries.excalidraw.com, inconsistent styles, no Kubernetes coverage) when a standardized icon exists. Returns refs to pass to add_image via iconRef.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'e.g. "pod", "kubernetes", "postgresql", "aws"' },
+        limit: { type: 'number' }
+      },
+      required: ['query']
     }
   },
   {
@@ -661,30 +756,7 @@ const tools: Tool[] = [
           type: 'array',
           items: {
             type: 'object',
-            properties: {
-              id: { type: 'string', description: 'Custom element ID. Arrows can reference this via startElementId/endElementId.' },
-              type: {
-                type: 'string',
-                enum: Object.values(EXCALIDRAW_ELEMENT_TYPES)
-              },
-              x: { type: 'number', description: 'Top-left X. Snap to a 20px grid; keep >=40px clear of neighboring shapes.' },
-              y: { type: 'number', description: 'Top-left Y. Snap to a 20px grid; keep >=40px clear of neighboring shapes.' },
-              width: { type: 'number', description: 'Shape width. Recommended: rectangle 160, diamond 140, ellipse 120. Minimum 120. Defaults applied if omitted.' },
-              height: { type: 'number', description: 'Shape height. Recommended: rectangle 80, diamond 100, ellipse 80. Minimum 60. Defaults applied if omitted.' },
-              backgroundColor: { type: 'string' },
-              strokeColor: { type: 'string' },
-              strokeWidth: { type: 'number' },
-              strokeStyle: { type: 'string', description: 'Stroke style: solid, dashed, dotted' },
-              roughness: { type: 'number' },
-              opacity: { type: 'number' },
-              text: { type: 'string' },
-              fontSize: { type: 'number' },
-              fontFamily: { type: ['string', 'number'], description: 'Font family: virgil/hand/handwritten (1), helvetica/sans/sans-serif (2), cascadia/mono/monospace (3), excalifont (5), nunito (6), lilita/lilita one (7), comic shanns/comic (8), or numeric ID' },
-              startElementId: { type: 'string', description: 'For arrows: ID of element to bind arrow start to' },
-              endElementId: { type: 'string', description: 'For arrows: ID of element to bind arrow end to' },
-              endArrowhead: { type: 'string', description: 'Arrowhead style at end: arrow, bar, dot, triangle, or null' },
-              startArrowhead: { type: 'string', description: 'Arrowhead style at start: arrow, bar, dot, triangle, or null' }
-            },
+            properties: ELEMENT_PROPERTIES,
             required: ['type', 'x', 'y']
           }
         },
@@ -969,39 +1041,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         const params = ElementSchema.parse(args);
         logger.info('Creating element via MCP', { type: params.type });
 
-        const { startElementId, endElementId, id: customId, ...elementProps } = params;
-        const id = customId || generateId();
-        const element: ServerElement = {
-          id,
-          ...elementProps,
-          points: elementProps.points ? normalizePoints(elementProps.points) : undefined,
-          // Convert binding IDs to Excalidraw's start/end format
-          ...(startElementId ? { start: { id: startElementId } } : {}),
-          ...(endElementId ? { end: { id: endElementId } } : {}),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          version: 1
-        };
-
-        // Normalize fontFamily from string names to numeric values
-        if (element.fontFamily !== undefined) {
-          element.fontFamily = normalizeFontFamily(element.fontFamily);
-        }
-
-        // For bound arrows without explicit points, set a default
-        if ((startElementId || endElementId) && !elementProps.points) {
-          (element as any).points = [[0, 0], [100, 0]];
-        }
-
-        // Fill in default dimensions for shapes when the AI omitted them
-        applyDefaultSize(element);
-
-        // Convert text to label format for Excalidraw
-        const excalidrawElement = convertTextToLabel(element);
+        const excalidrawElement = buildElement(params);
 
         // Create element directly on HTTP server (no local storage)
-        const canvasElement = await createElementOnCanvas(excalidrawElement);
-        
+        const createResult = await syncToCanvas('create', excalidrawElement);
+        const canvasElement = createResult?.element || excalidrawElement;
+
         if (!canvasElement) {
           throw new Error('Failed to create element: HTTP server unavailable');
         }
@@ -1013,13 +1058,73 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         });
         
         return {
-          content: [{ 
-            type: 'text', 
-            text: `Element created successfully!\n\n${JSON.stringify(canvasElement, null, 2)}\n\n✅ Synced to canvas` 
+          content: [{
+            type: 'text',
+            text: `Element created successfully!\n\n${JSON.stringify(canvasElement, null, 2)}\n\n✅ Synced to canvas`
           }]
         };
       }
-      
+
+      case 'add_image': {
+        const params = AddImageSchema.parse(args);
+
+        let raw: Buffer;
+        let mimeType = params.mimeType;
+        if (params.iconRef) {
+          const resolved = await resolveIconRef(params.iconRef);
+          raw = params.color
+            ? Buffer.from(recolorSvg(resolved.data.toString('utf-8'), params.color), 'utf-8')
+            : resolved.data;
+          mimeType = mimeType || resolved.mimeType;
+        } else if (params.filePath) {
+          const safePath = sanitizeFilePath(params.filePath);
+          raw = fs.readFileSync(safePath);
+          if (!mimeType) {
+            const ext = path.extname(safePath).toLowerCase();
+            mimeType = ext === '.svg' ? 'image/svg+xml' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+          }
+        } else {
+          raw = Buffer.from(params.data as string, 'base64');
+          mimeType = mimeType || 'image/png';
+        }
+
+        const fileId = params.id || generateId();
+        const dataURL = `data:${mimeType};base64,${raw.toString('base64')}`;
+        const uploaded = await uploadFile(fileId, dataURL, mimeType);
+        if (!uploaded) {
+          throw new Error('Failed to upload image: HTTP server unavailable');
+        }
+
+        let width = params.width ?? 120;
+        let height = params.height ?? 120;
+        if (params.targetWidth) {
+          height = height * (params.targetWidth / width);
+          width = params.targetWidth;
+        }
+
+        const excalidrawElement = buildElement({
+          type: 'image',
+          id: generateId(),
+          x: params.x,
+          y: params.y,
+          width,
+          height,
+          fileId,
+          status: 'saved',
+          scale: [1, 1],
+        } as any);
+
+        const createResult = await syncToCanvas('create', excalidrawElement);
+        const canvasElement = createResult?.element || excalidrawElement;
+
+        return {
+          content: [{
+            type: 'text',
+            text: `Image element created successfully!\n\n${JSON.stringify(canvasElement, null, 2)}\n\n✅ Synced to canvas`
+          }]
+        };
+      }
+
       case 'update_element': {
         const params = ElementIdSchema.merge(ElementSchema.partial()).parse(args);
         const { id, points: rawPoints, ...updates } = params;
@@ -1067,7 +1172,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         const { id } = params;
 
         // Delete element directly on HTTP server (no local storage)
-        const canvasResult = await deleteElementOnCanvas(id);
+        const canvasResult = await syncToCanvas('delete', { id });
 
         if (!canvasResult || !(canvasResult as ApiResponse).success) {
           throw new Error('Failed to delete element: HTTP server unavailable or element not found');
@@ -1480,37 +1585,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         const params = z.object({ elements: z.array(ElementSchema), autoLayout: z.boolean().optional() }).parse(args);
         logger.info('Batch creating elements via MCP', { count: params.elements.length, autoLayout: !!params.autoLayout });
 
-        const createdElements: ServerElement[] = [];
-
-        for (const elementData of params.elements) {
-          const { startElementId, endElementId, id: customId, ...elementProps } = elementData;
-          const id = customId || generateId();
-          const element: ServerElement = {
-            id,
-            ...elementProps,
-            points: elementProps.points ? normalizePoints(elementProps.points) : undefined,
-            // Convert binding IDs to Excalidraw's start/end format
-            ...(startElementId ? { start: { id: startElementId } } : {}),
-            ...(endElementId ? { end: { id: endElementId } } : {}),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            version: 1
-          };
-
-          // Normalize fontFamily from string names to numeric values
-          if (element.fontFamily !== undefined) {
-            element.fontFamily = normalizeFontFamily(element.fontFamily);
-          }
-
-          // For bound arrows without explicit points, set a default
-          if ((startElementId || endElementId) && !elementProps.points) {
-            (element as any).points = [[0, 0], [100, 0]];
-          }
-
-          applyDefaultSize(element);
-          const excalidrawElement = convertTextToLabel(element);
-          createdElements.push(excalidrawElement);
-        }
+        const createdElements: ServerElement[] = params.elements.map(buildElement);
 
         // Optionally auto-arrange: remove overlaps, enforce spacing, minimize crossings
         if (params.autoLayout) {
@@ -2377,6 +2452,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         return { content: [{ type: 'text', text: lines.join('\n') }] };
       }
 
+      case 'search_official_icon': {
+        const params = z.object({
+          query: z.string(),
+          limit: z.number().optional()
+        }).parse(args);
+        logger.info('Searching official icon libraries', { query: params.query });
+
+        const results = await searchOfficialIcons(params.query, params.limit ?? 10);
+
+        if (results.length === 0) {
+          return {
+            content: [{
+              type: 'text',
+              text: `No standardized icon matched "${params.query}". Try search_library_items for community icons, or draw with basic shapes.`
+            }]
+          };
+        }
+
+        const lines = results.map(r => `  ${r.ref}\n    ${r.name} — ${r.domain} (${r.source})`);
+        return {
+          content: [{
+            type: 'text',
+            text: `Found ${results.length} icon(s) for "${params.query}":\n\n${lines.join('\n')}\n\nInsert one with add_image using its ref as iconRef. Pass targetWidth (~80-120px) to normalize sizes.`
+          }]
+        };
+      }
+
       case 'search_library_items': {
         const params = z.object({
           query: z.string(),
@@ -2489,22 +2591,15 @@ if (process.env.DEBUG === 'true') {
   logger.debug('Debug mode enabled');
 }
 
-function getErrorCode(error: unknown): string | undefined {
-  if (typeof error === 'object' && error !== null && 'code' in error) {
-    const code = (error as { code?: unknown }).code;
-    return typeof code === 'string' ? code : undefined;
-  }
-
-  return undefined;
-}
-
 function resolveEntrypointPath(filePath: string | undefined): string | null {
   if (!filePath) return null;
 
   try {
     return fs.realpathSync(filePath);
   } catch (error) {
-    const code = getErrorCode(error);
+    const code = typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { code?: unknown }).code
+      : undefined;
     if (code !== 'ENOENT') {
       logger.warn(`fs.realpathSync failed for "${filePath}", falling back to path.resolve.`, {
         code,
