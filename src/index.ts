@@ -399,6 +399,12 @@ const DIAGRAM_DESIGN_GUIDE = `# Excalidraw Diagram Design Guide
 // these are always present, so the AI applies sizing/spacing without a tool call.
 const MCP_INSTRUCTIONS = `Excalidraw canvas toolkit. Follow these rules to produce clean, non-overlapping diagrams:
 
+CANVAS SERVER (required before any tool call):
+- This MCP tool speaks to a separate canvas server (default http://127.0.0.1:3000), not a bundled process — it will not auto-start.
+- If a tool call fails with a connection error (ECONNREFUSED, "fetch failed", "canvas server unavailable"): the canvas server process is not running. Start it yourself in the background: \`npm run canvas\` (or \`PORT=3000 npm run canvas\`) from the project root, wait a moment, then retry the tool call.
+- If a tool call fails with "No frontend client connected. Open the canvas in a browser first.": the server is up but no browser tab is connected via WebSocket. You cannot open a browser yourself — tell the user to open http://127.0.0.1:3000 (or the configured EXPRESS_SERVER_URL) in a browser tab, then retry.
+- Never tell the user "the canvas isn't started" without also taking the corresponding action above (starting the server) or giving them the exact URL to open.
+
 SIZING (always set width AND height on shapes):
 - Minimums: rectangle 160x80, diamond 140x100, ellipse 120x80. Never smaller than 120x60.
 - Same-role shapes must share identical dimensions.
