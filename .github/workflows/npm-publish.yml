@@ -15,8 +15,8 @@ jobs:
     name: Publish to NPM Registry
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      id-token: write
+      contents: write # gh release upload
+      id-token: write # npm --provenance
 
     steps:
       - name: Checkout code
@@ -69,9 +69,10 @@ jobs:
 
       - name: Publish to NPM (Manual)
         if: github.event_name == 'workflow_dispatch' && steps.check-version.outputs.exists == 'false'
-        run: npm publish --tag ${{ github.event.inputs.tag }} --provenance --access public
+        run: npm publish --tag "$DIST_TAG" --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ github.event.inputs.tag }}
 
       - name: Skip publishing (version exists)
         if: steps.check-version.outputs.exists == 'true'
@@ -79,19 +80,15 @@ jobs:
           echo "⚠️  Skipping publish - version ${{ steps.package-version.outputs.version }} already exists on NPM"
           echo "Please bump the version in package.json before publishing"
 
-      - name: Create GitHub Release Assets
-        if: github.event_name == 'release'
-        run: |
-          tar -czf mcp-excalidraw-server-${{ steps.package-version.outputs.version }}.tar.gz dist/
-
       - name: Upload Release Assets
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            mcp-excalidraw-server-${{ steps.package-version.outputs.version }}.tar.gz
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.package-version.outputs.version }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          tar -czf "excalidraw-icons-mcp-${VERSION}.tar.gz" dist/
+          gh release upload "$TAG" "excalidraw-icons-mcp-${VERSION}.tar.gz" --repo "$GITHUB_REPOSITORY"
 
   notify:
     name: Publish Notification
