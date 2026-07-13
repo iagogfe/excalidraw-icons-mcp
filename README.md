@@ -34,7 +34,8 @@ Keywords: Excalidraw agent skill, Excalidraw MCP server, AI diagramming, Claude 
   - [OpenCode](#opencode)
   - [Antigravity (Google)](#antigravity-google)
 - [Agent Skill (Optional)](#agent-skill-optional)
-- [MCP Tools (26 Total)](#mcp-tools-26-total)
+- [MCP Tools (31 Total)](#mcp-tools-31-total)
+- [Vendor Icon Packs](#vendor-icon-packs)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Known Issues / TODO](#known-issues--todo)
@@ -53,7 +54,7 @@ Excalidraw now has an [official MCP](https://github.com/excalidraw/excalidraw-mc
 
 | | Official Excalidraw MCP | This Project |
 |---|---|---|
-| **Approach** | Prompt in, diagram out (one-shot) | Programmatic element-level control (26 tools) |
+| **Approach** | Prompt in, diagram out (one-shot) | Programmatic element-level control (31 tools) |
 | **State** | Stateless — each call is independent | Persistent live canvas with real-time sync |
 | **Element CRUD** | No | Full create / read / update / delete per element |
 | **AI sees the canvas** | No | `describe_scene` (structured text) + `get_canvas_screenshot` (image) |
@@ -73,9 +74,17 @@ Excalidraw now has an [official MCP](https://github.com/excalidraw/excalidraw-mc
 
 ## What's New
 
-### v2.0 — Canvas Toolkit
+### Icons & Conventions (this fork)
 
-- 13 new MCP tools (26 total): `get_element`, `clear_canvas`, `export_scene`, `import_scene`, `export_to_image`, `duplicate_elements`, `snapshot_scene`, `restore_snapshot`, `describe_scene`, `get_canvas_screenshot`, `read_diagram_guide`, `export_to_excalidraw_url`, `set_viewport`
+- **Standardized icon search & insertion**: `search_official_icon` + `add_image` pull real vendor icons — official AWS/Azure/GCP/OCI packs (user-supplied, see [Vendor Icons](#vendor-icon-packs)), bundled Kubernetes, [simple-icons](https://simpleicons.org) (CC0), [Tabler](https://tabler.io/icons) (MIT), and [Iconify](https://iconify.design) (~200k icons, fetched on demand and cached). No more generic rectangles for an "RDS" or "Compute Engine".
+- **Community libraries**: `search_library_items` + `insert_library_item` for libraries.excalidraw.com shapes.
+- **Per-domain diagram conventions**: `read_diagram_guide` accepts `diagramType` (network, cloud-aws, cloud-gcp, cloud-azure, c4, erd, flowchart, sequence) and returns that domain's standard conventions — canonical icons, boundary containers, shape semantics.
+- **Auto-layout & validation**: `batch_create_elements` with `autoLayout: true` arranges nodes and removes overlaps; `validate_layout` flags overlaps, cramped spacing, and crossing arrows.
+- Performance and cleanup: single-batch creation flows, dependency pruning, dead-code removal.
+
+### v2.0 — Canvas Toolkit (upstream)
+
+- 13 new MCP tools: `get_element`, `clear_canvas`, `export_scene`, `import_scene`, `export_to_image`, `duplicate_elements`, `snapshot_scene`, `restore_snapshot`, `describe_scene`, `get_canvas_screenshot`, `read_diagram_guide`, `export_to_excalidraw_url`, `set_viewport`
 - **Closed feedback loop**: AI can now inspect the canvas (`describe_scene`) and see it (`get_canvas_screenshot` returns an image) — enabling iterative refinement
 - **Design guide**: `read_diagram_guide` returns best-practice color palettes, sizing rules, layout patterns, and anti-patterns — dramatically improves AI-generated diagram quality
 - **Shareable URLs**: `export_to_excalidraw_url` encrypts and uploads the scene to excalidraw.com, returns a shareable link anyone can open
@@ -423,13 +432,14 @@ EXPRESS_SERVER_URL=http://127.0.0.1:3000 node skills/excalidraw-skill/scripts/im
 
 See `skills/excalidraw-skill/SKILL.md` and `skills/excalidraw-skill/references/cheatsheet.md`.
 
-## MCP Tools (26 Total)
+## MCP Tools (31 Total)
 
 | Category | Tools |
 |---|---|
 | **Element CRUD** | `create_element`, `get_element`, `update_element`, `delete_element`, `query_elements`, `batch_create_elements`, `duplicate_elements` |
 | **Layout** | `align_elements`, `distribute_elements`, `group_elements`, `ungroup_elements`, `lock_elements`, `unlock_elements` |
-| **Scene Awareness** | `describe_scene`, `get_canvas_screenshot` |
+| **Icons & Libraries** | `search_official_icon`, `add_image`, `search_library_items`, `insert_library_item` |
+| **Scene Awareness** | `describe_scene`, `get_canvas_screenshot`, `validate_layout` |
 | **File I/O** | `export_scene`, `import_scene`, `export_to_image`, `export_to_excalidraw_url`, `create_from_mermaid` |
 | **State Management** | `clear_canvas`, `snapshot_scene`, `restore_snapshot` |
 | **Viewport** | `set_viewport` |
@@ -454,6 +464,19 @@ Full schemas are discoverable via `tools/list` or in `skills/excalidraw-skill/re
 | `sequence` | UML lifelines, sync/async message styles (prefers `create_from_mermaid`) |
 
 Conventions live in `src/diagramConventions.ts`; validated by `npm run test:conventions`.
+
+## Vendor Icon Packs
+
+`search_official_icon` works out of the box with bundled Kubernetes icons, simple-icons, Tabler, and Iconify (fetched on demand). Official cloud-vendor packs (AWS, Azure, GCP, OCI) are **not bundled** — each vendor requires accepting its own license, so you download them yourself and drop the SVGs under `icons/<vendor>/`. These folders are git-ignored and never redistributed by this repo.
+
+| Vendor | Folder | Where to get it |
+|--------|--------|-----------------|
+| AWS | `icons/aws/` | [AWS Architecture Icons](https://aws.amazon.com/architecture/icons/) — download the asset package, extract the `*_48.svg` / `Res_*.svg` files |
+| Azure | `icons/azure/` | [Azure architecture icons](https://learn.microsoft.com/en-us/azure/architecture/icons/) — official SVG zip |
+| GCP | `icons/gcp/` | [Google Cloud icons](https://cloud.google.com/icons) — official SVG zip |
+| OCI | `icons/oracle/` | [OCI diagram toolkit](https://docs.oracle.com/en-us/iaas/Content/General/Reference/graphicsfordiagrams.htm) |
+
+Drop the `.svg` files directly under the folder (subfolders are fine — the index walks recursively). Local packs take priority over Iconify in search results. After adding a pack, restart the MCP server so the icon index picks it up.
 
 ## Testing
 
