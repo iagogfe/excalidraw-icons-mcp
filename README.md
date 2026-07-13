@@ -21,9 +21,9 @@ Keywords: Excalidraw MCP server, AWS/Azure/GCP icons, AI architecture diagrams, 
 
 ## Demo
 
-![Excalidraw Icons MCP demo — an AI agent building a Google Cloud architecture diagram with real GCP icons](demo-icons.gif)
+![Excalidraw Icons MCP demo: an AI agent building a serverless AWS architecture with official icons](demo-icons.gif)
 
-*An AI agent builds a Google Cloud architecture — real GCP icons, zones, and typed connections — step by step on a live canvas.*
+*An AI agent builds a serverless AWS architecture step by step with Route 53, CloudFront, API Gateway, Lambda, DynamoDB, SQS, and S3.*
 
 ## Table of Contents
 
@@ -552,7 +552,7 @@ npm run build
 
 ## Credits
 
-This project started as a fork of [yctimlin/mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw), which provides the live canvas + MCP foundation. On top of it, this fork adds standardized icon search and insertion (official AWS/Azure/GCP/OCI/Kubernetes packs, simple-icons, Tabler, Iconify), per-domain diagram conventions, auto-layout, and performance improvements. The demo video above is from the original project.
+This project started as a fork of [yctimlin/mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw), which provides the live canvas + MCP foundation. On top of it, this fork adds standardized icon search and insertion (official AWS/Azure/GCP/OCI/Kubernetes packs, simple-icons, Tabler, Iconify), per-domain diagram conventions, auto-layout, and performance improvements. The demo above was recorded with this project's MCP server and official AWS icons.
 
 ## License
 
