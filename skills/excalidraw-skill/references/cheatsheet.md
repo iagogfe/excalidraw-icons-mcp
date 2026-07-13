@@ -67,6 +67,16 @@
 |------|-------------|-----------------|
 | `read_diagram_guide` | Get design best practices (colors, sizing, layout, anti-patterns); optional `diagramType` (network, cloud-aws, cloud-gcp, cloud-azure, c4, erd, flowchart, sequence) appends that domain's standard convention | (none) |
 
+### Icons & Libraries
+
+| Tool | Description | Required params |
+|------|-------------|-----------------|
+| `search_official_icon` | Search standardized icon libraries (local vendor packs, Kubernetes, simple-icons, Tabler, Iconify); returns refs for `add_image` | `query` |
+| `add_image` | Insert a raster/SVG image element; provide one of `iconRef` / `filePath` / `data` | `x`, `y` |
+| `search_library_items` | Search community libraries.excalidraw.com for ready-made shapes | `query` |
+| `insert_library_item` | Insert a library item (from `search_library_items`) as a grouped unit; returns `anchorId` for arrows | `ref`, `x`, `y` |
+| `validate_layout` | Report overlaps, cramped spacing, off-screen elements, oversized labels, crossing arrows | (none) |
+
 ### Conversion
 
 | Tool | Description | Required params |

@@ -300,4 +300,4 @@ curl -X POST http://127.0.0.1:3000/api/elements/from-mermaid \
 
 ## References
 
-- `references/cheatsheet.md`: Complete MCP tool list (26 tools) + REST API endpoints + payload shapes.
+- `references/cheatsheet.md`: Complete MCP tool list (31 tools) + REST API endpoints + payload shapes.
