@@ -14,9 +14,9 @@ Keywords: Excalidraw MCP server, AWS/Azure/GCP icons, AI architecture diagrams, 
 
 ## Demo
 
-![MCP Excalidraw Demo](demo.gif)
+![Excalidraw Icons MCP demo — an AI agent building a Google Cloud architecture diagram with real GCP icons](demo-icons.gif)
 
-*AI agent creates a complete architecture diagram from a single prompt (4x speed). [Watch full video on YouTube](https://youtu.be/ufW78Amq5qA)*
+*An AI agent builds a Google Cloud architecture — real GCP icons, zones, and typed connections — step by step on a live canvas.*
 
 ## Table of Contents
 
