@@ -438,6 +438,23 @@ See `skills/excalidraw-skill/SKILL.md` and `skills/excalidraw-skill/references/c
 
 Full schemas are discoverable via `tools/list` or in `skills/excalidraw-skill/references/cheatsheet.md`.
 
+### Per-Domain Diagram Conventions
+
+`read_diagram_guide` accepts an optional `diagramType` — the client LLM identifies the diagram domain from the user's request and passes it to get that domain's standard convention appended to the guide (canonical icons, boundary containers, shape semantics, flow direction):
+
+| `diagramType` | Convention |
+|---|---|
+| `network` | Cisco-style icons, LAN→ISP→cloud flow, dashed segment containers (LAN/DMZ/VLAN) |
+| `cloud-gcp` | Official GCP icons, Google Cloud boundary + region/zone containers |
+| `cloud-aws` | AWS Cloud → Region → VPC → AZ/subnet container nesting |
+| `cloud-azure` | Azure boundary, resource-group grouping, VNet/subnet containers |
+| `c4` | C4 Model levels (one per diagram), Structurizr palette, labeled arrows with protocol |
+| `erd` | Crow's-foot cardinality labels, entity layout rules |
+| `flowchart` | ISO 5807 shape semantics (diamond = decision, labeled exits) |
+| `sequence` | UML lifelines, sync/async message styles (prefers `create_from_mermaid`) |
+
+Conventions live in `src/diagramConventions.ts`; validated by `npm run test:conventions`.
+
 ## Testing
 
 ### Canvas Smoke Test (HTTP)

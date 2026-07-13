@@ -30,6 +30,7 @@ import {
 import { autoLayout, detectLayoutIssues, LayoutElement } from './layout.js';
 import { searchLibraryItems, getItemByRef, instantiateLibraryItem } from './libraries.js';
 import { searchOfficialIcons, resolveIconRef, recolorSvg } from './officialIcons.js';
+import { DIAGRAM_CONVENTIONS, DIAGRAM_TYPES } from './diagramConventions.js';
 
 // Load environment variables
 dotenv.config();
@@ -425,7 +426,8 @@ WORKFLOW:
 - Bind arrows with startElementId/endElementId (auto-routes to shape edges) instead of manual points.
 - Give shapes a custom id so arrows in the same batch can reference them.
 
-For the full color palette, diagram templates and anti-patterns, call read_diagram_guide.`;
+For the full color palette, diagram templates and anti-patterns, call read_diagram_guide.
+If the diagram matches a known domain (network, cloud-aws, cloud-gcp, cloud-azure, c4, erd, flowchart, sequence), call read_diagram_guide with diagramType and follow the returned convention (canonical icons, boundary containers, shape semantics).`;
 
 // Default dimensions applied when the AI omits width/height on a shape, so
 // elements are never rendered tiny/sizeless (a common cause of cramped canvases).
@@ -920,10 +922,16 @@ const tools: Tool[] = [
   },
   {
     name: 'read_diagram_guide',
-    description: 'Returns a comprehensive design guide for creating beautiful Excalidraw diagrams: color palette, sizing rules, layout patterns, arrow binding best practices, diagram templates, and anti-patterns. Call this before creating diagrams to produce professional results.',
+    description: 'Returns a comprehensive design guide for creating beautiful Excalidraw diagrams: color palette, sizing rules, layout patterns, arrow binding best practices, diagram templates, and anti-patterns. Call this before creating diagrams to produce professional results. If the requested diagram matches a known domain, pass diagramType to also get that domain\'s standard convention (canonical icons, boundary containers, shape semantics, flow direction) and follow it.',
     inputSchema: {
       type: 'object',
-      properties: {}
+      properties: {
+        diagramType: {
+          type: 'string',
+          enum: DIAGRAM_TYPES,
+          description: 'Domain of the diagram being drawn. Appends the standard convention for that domain (e.g. cloud-gcp adds the official-icon + boundary-container rules used in Google Cloud reference architectures).'
+        }
+      }
     }
   },
   {
@@ -2094,8 +2102,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       }
 
       case 'read_diagram_guide': {
+        const diagramType = (args as { diagramType?: string } | undefined)?.diagramType;
+        const convention = diagramType ? DIAGRAM_CONVENTIONS[diagramType] : undefined;
+        const guideText = convention
+          ? `${DIAGRAM_DESIGN_GUIDE}\n\n---\n\n${convention}`
+          : DIAGRAM_DESIGN_GUIDE;
         return {
-          content: [{ type: 'text', text: DIAGRAM_DESIGN_GUIDE }]
+          content: [{ type: 'text', text: guideText }]
         };
       }
 

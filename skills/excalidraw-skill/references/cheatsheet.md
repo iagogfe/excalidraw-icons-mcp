@@ -65,7 +65,7 @@
 
 | Tool | Description | Required params |
 |------|-------------|-----------------|
-| `read_diagram_guide` | Get design best practices (colors, sizing, layout, anti-patterns) | (none) |
+| `read_diagram_guide` | Get design best practices (colors, sizing, layout, anti-patterns); optional `diagramType` (network, cloud-aws, cloud-gcp, cloud-azure, c4, erd, flowchart, sequence) appends that domain's standard convention | (none) |
 
 ### Conversion
 

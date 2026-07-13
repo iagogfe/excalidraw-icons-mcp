@@ -133,7 +133,7 @@ If you find any issue: **stop, fix it, re-screenshot, then continue.** Say "I se
 
 ### MCP Mode
 
-1. Call `read_diagram_guide` for design best practices (colors, fonts, anti-patterns).
+1. Call `read_diagram_guide` for design best practices (colors, fonts, anti-patterns). If the diagram matches a known domain, pass `diagramType` (`network`, `cloud-aws`, `cloud-gcp`, `cloud-azure`, `c4`, `erd`, `flowchart`, `sequence`) and follow the appended convention.
 2. Plan your coordinate grid on paper/in comments — map out tiers and x-positions before writing JSON.
 3. Optional: `clear_canvas` to start fresh.
 4. Use `batch_create_elements` — create shapes and arrows in one call. Custom `id` fields (e.g. `"id": "auth-svc"`) make later updates easy.
