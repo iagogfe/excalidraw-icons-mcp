@@ -19,6 +19,7 @@
     "prepublishOnly": "npm run build",
     "test:bind": "npm run build:server && node scripts/check-local-bind.mjs",
     "test:libraries": "npm run build:server && node scripts/test-libraries.mjs",
+    "test:conventions": "npm run build:server && node scripts/test-conventions.mjs",
     "type-check": "npx tsc --noEmit"
   },
   "dependencies": {
