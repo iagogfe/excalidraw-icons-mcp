@@ -15,12 +15,12 @@ Two modes are available. Try MCP first — it has more capabilities.
 
 **Neither works?** Tell the user:
 > The Excalidraw canvas server is not running. To set up:
-> 1. `git clone https://github.com/yctimlin/mcp_excalidraw && cd mcp_excalidraw`
+> 1. `git clone https://github.com/iagogfe/excalidraw-icons-mcp && cd excalidraw-icons-mcp`
 > 2. `npm ci && npm run build`
 > 3. `PORT=3000 npm run canvas`
 > 4. Open `http://127.0.0.1:3000` in a browser
 > 5. (Recommended) Install the MCP server:
->    `claude mcp add excalidraw -s user -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 -- node /path/to/mcp_excalidraw/dist/index.js`
+>    `claude mcp add excalidraw -s user -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 -- node /path/to/excalidraw-icons-mcp/dist/index.js`
 
 ### MCP vs REST API Quick Reference
 
