@@ -2,20 +2,20 @@
 
 Notable changes to this project. Versions follow [SemVer](https://semver.org/).
 
-## Unreleased
+## 1.0.0 — 2026-07-13
 
-- Per-domain diagram conventions in `read_diagram_guide` via `diagramType` (network, cloud-aws, cloud-gcp, cloud-azure, c4, erd, flowchart, sequence)
-- Support for user-supplied official vendor icon packs under `icons/{aws,azure,gcp,oracle}` (gitignored; see README)
+First public release. A fork of [yctimlin/mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw) rebuilt around standardized icon insertion.
 
-## 1.0.x — excalidraw-icons-mcp
+### Added
+- **Icon search & insertion**: `search_official_icon` + `add_image` — official AWS/Azure/GCP/OCI packs (user-supplied), bundled Kubernetes, simple-icons (CC0), Tabler (MIT), and Iconify (~200k icons, fetched on demand and cached to disk).
+- **Community libraries**: `search_library_items` + `insert_library_item` (libraries.excalidraw.com).
+- **Per-domain diagram conventions**: `read_diagram_guide` accepts `diagramType` (network, cloud-aws, cloud-gcp, cloud-azure, c4, erd, flowchart, sequence).
+- **Auto-layout & validation**: `batch_create_elements` with `autoLayout: true`, plus `validate_layout`.
+- 31 MCP tools total; live canvas with real-time WebSocket sync (from upstream).
 
-- Rebrand from mcp_excalidraw fork to excalidraw-icons-mcp
-- Standardized icon libraries: `search_official_icon` + `add_image` (bundled Kubernetes, simple-icons, Tabler, Iconify on-demand with disk cache)
-- Community library support: `search_library_items` + `insert_library_item` (libraries.excalidraw.com)
-- Auto-layout for batch creation (`autoLayout: true`) and `validate_layout`
-- Performance: single-batch creation flows, dead-code cleanup, dependency pruning
+### Changed
+- Rebranded from `mcp_excalidraw` to `excalidraw-icons-mcp`.
+- Dropped `winston` (replaced by a small stderr+file logger) and `mermaid` (unused; provided transitively). Updated in-range dependencies.
 
-## Upstream (yctimlin/mcp_excalidraw v2.0)
-
-- 26 MCP tools: element CRUD, layout, scene awareness (`describe_scene`, `get_canvas_screenshot`), file I/O, snapshots, Mermaid conversion, shareable URLs, viewport control
-- Live canvas with real-time WebSocket sync
+### Security
+- Canvas server binds to `127.0.0.1` by default; path traversal guarded on all file and icon operations. See [SECURITY.md](SECURITY.md).
