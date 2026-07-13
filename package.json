@@ -1,6 +1,6 @@
 {
   "name": "excalidraw-icons-mcp",
-  "version": "1.0.7",
+  "version": "1.0.0",
   "description": "Faster Excalidraw MCP server with real icon/library search and insertion for agent-built diagrams",
   "main": "dist/index.js",
   "type": "module",
