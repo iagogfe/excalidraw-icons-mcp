@@ -118,7 +118,7 @@ EXPRESS_SERVER_URL=http://127.0.0.1:3000 node dist/index.js
 
 Canvas server:
 ```bash
-docker run -d -p 3000:3000 --name mcp-excalidraw-canvas ghcr.io/iagogfe/excalidraw-icons-mcp-canvas:latest
+docker run -d -p 3000:3000 --name excalidraw-icons-canvas ghcr.io/iagogfe/excalidraw-icons-mcp-canvas:latest
 ```
 
 MCP server (stdio) is typically launched by your MCP client (Claude Desktop/Cursor/etc.). If you want a local container for it, use the image `ghcr.io/iagogfe/excalidraw-icons-mcp:latest` and set `EXPRESS_SERVER_URL` to point at the canvas.
@@ -149,7 +149,7 @@ Config location:
   "mcpServers": {
     "excalidraw": {
       "command": "node",
-      "args": ["/absolute/path/to/mcp_excalidraw/dist/index.js"],
+      "args": ["/absolute/path/to/excalidraw-icons-mcp/dist/index.js"],
       "env": {
         "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
         "ENABLE_CANVAS_SYNC": "true"
@@ -187,7 +187,7 @@ Use the `claude mcp add` command to register the MCP server.
 claude mcp add excalidraw --scope user \
   -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
   -e ENABLE_CANVAS_SYNC=true \
-  -- node /absolute/path/to/mcp_excalidraw/dist/index.js
+  -- node /absolute/path/to/excalidraw-icons-mcp/dist/index.js
 ```
 
 **Local (node)** - Project-level (shared via `.mcp.json`):
@@ -195,7 +195,7 @@ claude mcp add excalidraw --scope user \
 claude mcp add excalidraw --scope project \
   -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
   -e ENABLE_CANVAS_SYNC=true \
-  -- node /absolute/path/to/mcp_excalidraw/dist/index.js
+  -- node /absolute/path/to/excalidraw-icons-mcp/dist/index.js
 ```
 
 **Docker**
@@ -225,7 +225,7 @@ Config location: `.cursor/mcp.json` in your project root (or `~/.cursor/mcp.json
   "mcpServers": {
     "excalidraw": {
       "command": "node",
-      "args": ["/absolute/path/to/mcp_excalidraw/dist/index.js"],
+      "args": ["/absolute/path/to/excalidraw-icons-mcp/dist/index.js"],
       "env": {
         "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
         "ENABLE_CANVAS_SYNC": "true"
@@ -263,7 +263,7 @@ Use the `codex mcp add` command to register the MCP server.
 codex mcp add excalidraw \
   --env EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
   --env ENABLE_CANVAS_SYNC=true \
-  -- node /absolute/path/to/mcp_excalidraw/dist/index.js
+  -- node /absolute/path/to/excalidraw-icons-mcp/dist/index.js
 ```
 
 **Docker**
@@ -294,7 +294,7 @@ Config location: `~/.config/opencode/opencode.json` or project-level `opencode.j
   "mcp": {
     "excalidraw": {
       "type": "local",
-      "command": ["node", "/absolute/path/to/mcp_excalidraw/dist/index.js"],
+      "command": ["node", "/absolute/path/to/excalidraw-icons-mcp/dist/index.js"],
       "enabled": true,
       "environment": {
         "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
@@ -331,7 +331,7 @@ Config location: `~/.gemini/antigravity/mcp_config.json`
   "mcpServers": {
     "excalidraw": {
       "command": "node",
-      "args": ["/absolute/path/to/mcp_excalidraw/dist/index.js"],
+      "args": ["/absolute/path/to/excalidraw-icons-mcp/dist/index.js"],
       "env": {
         "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
         "ENABLE_CANVAS_SYNC": "true"
@@ -364,7 +364,7 @@ Config location: `~/.gemini/antigravity/mcp_config.json`
 
 - **Docker networking**: Use `host.docker.internal` to reach the canvas server running on your host machine. On Linux, you may need `--add-host=host.docker.internal:host-gateway` or use `172.17.0.1`.
 - **Canvas server**: Must be running before the MCP server connects. Start it with `npm run canvas` (local) or `docker run -d -p 3000:3000 ghcr.io/iagogfe/excalidraw-icons-mcp-canvas:latest` (Docker).
-- **Absolute paths**: When using local node setup, replace `/absolute/path/to/mcp_excalidraw` with the actual path where you cloned and built the repo.
+- **Absolute paths**: When using local node setup, replace `/absolute/path/to/excalidraw-icons-mcp` with the actual path where you cloned and built the repo.
 - **In-memory storage**: The canvas server stores elements in memory. Restarting the server will clear all elements. Use the export/import scripts if you need persistence.
 
 ## Agent Skill (Optional)
