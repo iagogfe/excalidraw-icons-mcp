@@ -1,8 +1,8 @@
 # Excalidraw MCP Server & Agent Skill
 
-[![CI](https://github.com/yctimlin/mcp_excalidraw/actions/workflows/ci.yml/badge.svg)](https://github.com/yctimlin/mcp_excalidraw/actions/workflows/ci.yml)
-[![Docker Build & Push](https://github.com/yctimlin/mcp_excalidraw/actions/workflows/docker.yml/badge.svg)](https://github.com/yctimlin/mcp_excalidraw/actions/workflows/docker.yml)
-[![NPM Version](https://img.shields.io/npm/v/mcp-excalidraw-server)](https://www.npmjs.com/package/mcp-excalidraw-server)
+[![CI](https://github.com/iagogfe/excalidraw-icons-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/iagogfe/excalidraw-icons-mcp/actions/workflows/ci.yml)
+[![Docker Build & Push](https://github.com/iagogfe/excalidraw-icons-mcp/actions/workflows/docker.yml/badge.svg)](https://github.com/iagogfe/excalidraw-icons-mcp/actions/workflows/docker.yml)
+[![NPM Version](https://img.shields.io/npm/v/excalidraw-icons-mcp)](https://www.npmjs.com/package/excalidraw-icons-mcp)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Run a live Excalidraw canvas and control it from AI agents. This repo provides:
@@ -118,10 +118,10 @@ EXPRESS_SERVER_URL=http://127.0.0.1:3000 node dist/index.js
 
 Canvas server:
 ```bash
-docker run -d -p 3000:3000 --name mcp-excalidraw-canvas ghcr.io/yctimlin/mcp_excalidraw-canvas:latest
+docker run -d -p 3000:3000 --name mcp-excalidraw-canvas ghcr.io/iagogfe/excalidraw-icons-mcp-canvas:latest
 ```
 
-MCP server (stdio) is typically launched by your MCP client (Claude Desktop/Cursor/etc.). If you want a local container for it, use the image `ghcr.io/yctimlin/mcp_excalidraw:latest` and set `EXPRESS_SERVER_URL` to point at the canvas.
+MCP server (stdio) is typically launched by your MCP client (Claude Desktop/Cursor/etc.). If you want a local container for it, use the image `ghcr.io/iagogfe/excalidraw-icons-mcp:latest` and set `EXPRESS_SERVER_URL` to point at the canvas.
 
 ## Configure MCP Clients
 
@@ -169,7 +169,7 @@ Config location:
         "run", "-i", "--rm",
         "-e", "EXPRESS_SERVER_URL=http://host.docker.internal:3000",
         "-e", "ENABLE_CANVAS_SYNC=true",
-        "ghcr.io/yctimlin/mcp_excalidraw:latest"
+        "ghcr.io/iagogfe/excalidraw-icons-mcp:latest"
       ]
     }
   }
@@ -204,7 +204,7 @@ claude mcp add excalidraw --scope user \
   -- docker run -i --rm \
   -e EXPRESS_SERVER_URL=http://host.docker.internal:3000 \
   -e ENABLE_CANVAS_SYNC=true \
-  ghcr.io/yctimlin/mcp_excalidraw:latest
+  ghcr.io/iagogfe/excalidraw-icons-mcp:latest
 ```
 
 **Manage servers:**
@@ -245,7 +245,7 @@ Config location: `.cursor/mcp.json` in your project root (or `~/.cursor/mcp.json
         "run", "-i", "--rm",
         "-e", "EXPRESS_SERVER_URL=http://host.docker.internal:3000",
         "-e", "ENABLE_CANVAS_SYNC=true",
-        "ghcr.io/yctimlin/mcp_excalidraw:latest"
+        "ghcr.io/iagogfe/excalidraw-icons-mcp:latest"
       ]
     }
   }
@@ -272,7 +272,7 @@ codex mcp add excalidraw \
   -- docker run -i --rm \
   -e EXPRESS_SERVER_URL=http://host.docker.internal:3000 \
   -e ENABLE_CANVAS_SYNC=true \
-  ghcr.io/yctimlin/mcp_excalidraw:latest
+  ghcr.io/iagogfe/excalidraw-icons-mcp:latest
 ```
 
 **Manage servers:**
@@ -312,7 +312,7 @@ Config location: `~/.config/opencode/opencode.json` or project-level `opencode.j
   "mcp": {
     "excalidraw": {
       "type": "local",
-      "command": ["docker", "run", "-i", "--rm", "-e", "EXPRESS_SERVER_URL=http://host.docker.internal:3000", "-e", "ENABLE_CANVAS_SYNC=true", "ghcr.io/yctimlin/mcp_excalidraw:latest"],
+      "command": ["docker", "run", "-i", "--rm", "-e", "EXPRESS_SERVER_URL=http://host.docker.internal:3000", "-e", "ENABLE_CANVAS_SYNC=true", "ghcr.io/iagogfe/excalidraw-icons-mcp:latest"],
       "enabled": true
     }
   }
@@ -351,7 +351,7 @@ Config location: `~/.gemini/antigravity/mcp_config.json`
         "run", "-i", "--rm",
         "-e", "EXPRESS_SERVER_URL=http://host.docker.internal:3000",
         "-e", "ENABLE_CANVAS_SYNC=true",
-        "ghcr.io/yctimlin/mcp_excalidraw:latest"
+        "ghcr.io/iagogfe/excalidraw-icons-mcp:latest"
       ]
     }
   }
@@ -363,7 +363,7 @@ Config location: `~/.gemini/antigravity/mcp_config.json`
 ### Notes
 
 - **Docker networking**: Use `host.docker.internal` to reach the canvas server running on your host machine. On Linux, you may need `--add-host=host.docker.internal:host-gateway` or use `172.17.0.1`.
-- **Canvas server**: Must be running before the MCP server connects. Start it with `npm run canvas` (local) or `docker run -d -p 3000:3000 ghcr.io/yctimlin/mcp_excalidraw-canvas:latest` (Docker).
+- **Canvas server**: Must be running before the MCP server connects. Start it with `npm run canvas` (local) or `docker run -d -p 3000:3000 ghcr.io/iagogfe/excalidraw-icons-mcp-canvas:latest` (Docker).
 - **Absolute paths**: When using local node setup, replace `/absolute/path/to/mcp_excalidraw` with the actual path where you cloned and built the repo.
 - **In-memory storage**: The canvas server stores elements in memory. Restarting the server will clear all elements. Use the export/import scripts if you need persistence.
 
@@ -502,7 +502,7 @@ agent-browser screenshot /tmp/canvas.png
 ## Troubleshooting
 
 - Canvas not updating: confirm `EXPRESS_SERVER_URL` points at the running canvas server.
-- Updates/deletes fail after batch creation: ensure you are on a build that includes the batch id preservation fix (merged via PR #34).
+- Updates/deletes fail after batch creation: ensure you are on a build that includes the batch id preservation fix.
 
 ## Known Issues / TODO
 
@@ -519,3 +519,11 @@ Contributions welcome!
 npm run type-check
 npm run build
 ```
+
+## Credits
+
+This project started as a fork of [yctimlin/mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw), which provides the live canvas + MCP foundation. On top of it, this fork adds standardized icon search and insertion (official AWS/Azure/GCP/OCI/Kubernetes packs, simple-icons, Tabler, Iconify), per-domain diagram conventions, auto-layout, and performance improvements. The demo video above is from the original project.
+
+## License
+
+[MIT](LICENSE) — original work © 2024 MCP Excalidraw Server (yctimlin), modifications © 2026 Iago Gonçalves.
