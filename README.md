@@ -1,16 +1,16 @@
-# Excalidraw MCP Server & Agent Skill
+# Excalidraw Icons MCP
 
 [![CI](https://github.com/iagogfe/excalidraw-icons-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/iagogfe/excalidraw-icons-mcp/actions/workflows/ci.yml)
 [![Docker Build & Push](https://github.com/iagogfe/excalidraw-icons-mcp/actions/workflows/docker.yml/badge.svg)](https://github.com/iagogfe/excalidraw-icons-mcp/actions/workflows/docker.yml)
-[![NPM Version](https://img.shields.io/npm/v/excalidraw-icons-mcp)](https://www.npmjs.com/package/excalidraw-icons-mcp)
+[![Release](https://img.shields.io/github/v/release/iagogfe/excalidraw-icons-mcp)](https://github.com/iagogfe/excalidraw-icons-mcp/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Run a live Excalidraw canvas and control it from AI agents. This repo provides:
+Let AI agents draw architecture diagrams in Excalidraw with **real vendor icons** — official AWS, Azure, GCP, OCI, and Kubernetes icons instead of generic rectangles — on a live canvas they can see and refine. This repo provides:
 
-- **MCP Server**: Connect via Model Context Protocol (Claude Desktop, Cursor, Codex CLI, etc.)
+- **MCP Server**: 31 tools over the Model Context Protocol (Claude Desktop, Cursor, Codex CLI, etc.) — icon search & insertion, element CRUD, auto-layout, per-domain diagram conventions
 - **Agent Skill**: Portable skill for Claude Code, Codex CLI, and other skill-enabled agents
 
-Keywords: Excalidraw agent skill, Excalidraw MCP server, AI diagramming, Claude Code skill, Codex CLI skill, Claude Desktop MCP, Cursor MCP, Mermaid to Excalidraw.
+Keywords: Excalidraw MCP server, AWS/Azure/GCP icons, AI architecture diagrams, diagrams as code, Claude Code skill, Codex CLI skill, Cursor MCP, Mermaid to Excalidraw.
 
 ## Demo
 
