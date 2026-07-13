@@ -29,3 +29,8 @@ autosearch-hitl-results.tsv
 .env
 .env.*
 icons/_cache/
+# Vendor icon packs: manual download + license acceptance; not redistributable
+icons/aws/
+icons/azure/
+icons/gcp/
+icons/network/
