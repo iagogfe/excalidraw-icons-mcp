@@ -20,7 +20,8 @@
     "test:bind": "npm run build:server && node scripts/check-local-bind.mjs",
     "test:libraries": "npm run build:server && node scripts/test-libraries.mjs",
     "test:conventions": "npm run build:server && node scripts/test-conventions.mjs",
-    "type-check": "npx tsc --noEmit"
+    "type-check": "npx tsc --noEmit",
+    "test:arrow-drag": "npm run build && node scripts/test-arrow-drag.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.0",
@@ -43,6 +44,7 @@
     "@types/ws": "^8.5.10",
     "@vitejs/plugin-react": "^4.6.0",
     "concurrently": "^9.2.0",
+    "playwright": "^1.61.1",
     "typescript": "^5.8.3",
     "vite": "^6.3.5"
   },

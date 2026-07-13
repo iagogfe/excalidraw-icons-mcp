@@ -2,6 +2,11 @@
 
 Notable changes to this project. Versions follow [SemVer](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+- Arrows/lines loaded through the canvas convert pipeline are now re-normalized (`points[0]` forced to `[0,0]`). Excalidraw requires this; without it a loaded arrow logged "Linear element is not normalized" and jumped off-screen on the first drag or select — it looked like the arrow vanished. Regression test: `npm run test:arrow-drag` (drives a real browser drag via Playwright).
+
 ## 1.0.0 — 2026-07-13
 
 First public release. A fork of [yctimlin/mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw) rebuilt around standardized icon insertion.

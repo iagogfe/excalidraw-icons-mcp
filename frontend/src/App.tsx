@@ -281,6 +281,25 @@ const restoreBindings = (
   });
 };
 
+// Excalidraw requires linear elements (arrow/line) to be "normalized": points[0] === [0, 0],
+// with x/y holding the absolute position of that first point. convertToExcalidrawElements can
+// leave points[0] slightly off (e.g. [0.5, 0]); Excalidraw then throws "Linear element is not
+// normalized" and mangles coordinates on the first drag/select (the arrow jumps off-screen and
+// looks like it vanished). Re-normalize so the absolute geometry is unchanged.
+const normalizeLinearElement = (element: Partial<ExcalidrawElement>): Partial<ExcalidrawElement> => {
+  if (element.type !== 'arrow' && element.type !== 'line') return element
+  const points = (element as any).points as [number, number][] | undefined
+  if (!Array.isArray(points) || points.length === 0) return element
+  const [dx, dy] = points[0]
+  if (dx === 0 && dy === 0) return element
+  return {
+    ...element,
+    x: (element.x ?? 0) + dx,
+    y: (element.y ?? 0) + dy,
+    points: points.map(([px, py]) => [px - dx, py - dy]) as any,
+  }
+}
+
 const convertElementsPreservingImageProps = (
   elements: Partial<ExcalidrawElement>[]
 ): Partial<ExcalidrawElement>[] => {
@@ -294,7 +313,8 @@ const convertElementsPreservingImageProps = (
   // so we cannot assume a 1:1 mapping — return all converted elements directly.
   const convertedNonImageElements = convertToExcalidrawElements(nonImageElements as any, { regenerateIds: false })
   const restoredNonImageElements = restoreBindings(convertedNonImageElements, nonImageElements)
-  return recenterBoundShapeTextElements([...restoredNonImageElements, ...imageElements, ...freedrawElements])
+  const normalized = recenterBoundShapeTextElements([...restoredNonImageElements, ...imageElements, ...freedrawElements])
+  return normalized.map(normalizeLinearElement)
 }
 
 function App(): JSX.Element {
