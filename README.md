@@ -5,7 +5,14 @@
 [![Release](https://img.shields.io/github/v/release/iagogfe/excalidraw-icons-mcp)](https://github.com/iagogfe/excalidraw-icons-mcp/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Let AI agents draw architecture diagrams in Excalidraw with **real vendor icons** — official AWS, Azure, GCP, OCI, and Kubernetes icons instead of generic rectangles — on a live canvas they can see and refine. This repo provides:
+A **faster** Excalidraw MCP server built around **real vendor icons**. AI agents draw architecture diagrams with official AWS, Azure, GCP, OCI, and Kubernetes icons — not generic rectangles — in one-shot batches on a live canvas they can see and refine.
+
+Two things set it apart from the upstream fork it grew from:
+
+- ⚡ **Speed**: single-batch element creation, a leaner dependency tree, and an optimized canvas load path — fewer round-trips per diagram.
+- 🎨 **Real icons**: `search_official_icon` + `add_image` pull actual vendor icons instead of drawing shapes that only approximate them.
+
+This repo provides:
 
 - **MCP Server**: 31 tools over the Model Context Protocol (Claude Desktop, Cursor, Codex CLI, etc.) — icon search & insertion, element CRUD, auto-layout, per-domain diagram conventions
 - **Agent Skill**: Portable skill for Claude Code, Codex CLI, and other skill-enabled agents
