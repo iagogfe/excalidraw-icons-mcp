@@ -1,4 +1,3 @@
-import winston from 'winston';
 import * as path from 'path';
 import * as fs from 'fs';
 import { homedir, tmpdir } from 'os';
@@ -46,32 +45,26 @@ function resolveLogFilePath(): string {
 
 const RESOLVED_LOG_FILE_PATH = resolveLogFilePath();
 
-const logger: winston.Logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+// ponytail: replaced winston (dep + 40-line config) with a stderr+file shim.
+// Same routing: all levels to the log file, warn+error also to stderr.
+const LEVELS = { error: 0, warn: 1, info: 2, debug: 3 } as const;
+type Level = keyof typeof LEVELS;
+const MAX_LEVEL = LEVELS[(process.env.LOG_LEVEL as Level) in LEVELS ? (process.env.LOG_LEVEL as Level) : 'info'];
 
-  format: winston.format.combine(
-    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
-    winston.format.uncolorize(),
-    winston.format.metadata({ fillExcept: ['message', 'level', 'timestamp'] }),
-    winston.format.printf(info => {
-      const extra = info.metadata && Object.keys(info.metadata).length
-        ? ` ${JSON.stringify(info.metadata)}`
-        : '';
-      return `${info.timestamp} [${info.level}] ${info.message}${extra}`
-    })
-  ),
+function log(level: Level, message: string, meta?: unknown): void {
+  if (LEVELS[level] > MAX_LEVEL) return;
+  const ts = new Date().toISOString().replace('T', ' ').replace('Z', '');
+  const extra = meta && typeof meta === 'object' && Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
+  const line = `${ts} [${level}] ${message}${extra}\n`;
+  try { fs.appendFileSync(RESOLVED_LOG_FILE_PATH, line); } catch { /* file sink is best-effort */ }
+  if (level === 'warn' || level === 'error') process.stderr.write(line);
+}
 
-  transports: [
-    new winston.transports.Console({
-      level: 'warn',                 // only warn+error to stderr
-      stderrLevels: ['warn','error']
-    }),
-
-    new winston.transports.File({
-      filename: RESOLVED_LOG_FILE_PATH,    // all levels to file
-      level: 'debug'
-    })
-  ]
-});
+const logger = {
+  error: (m: string, meta?: unknown) => log('error', m, meta),
+  warn: (m: string, meta?: unknown) => log('warn', m, meta),
+  info: (m: string, meta?: unknown) => log('info', m, meta),
+  debug: (m: string, meta?: unknown) => log('debug', m, meta),
+};
 
 export default logger;
