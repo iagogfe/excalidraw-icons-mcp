@@ -144,6 +144,7 @@ const QUERY_ALIASES: Record<string, string> = {
   aks: 'kubernetes services',
   vm: 'virtual machine',
   k8s: 'kubernetes',
+  oci: 'oracle',
   // Kubernetes resources → kubectl short names used by the bundled pack files
   deployment: 'deploy',
   configmap: 'cm',
@@ -157,6 +158,12 @@ const QUERY_ALIASES: Record<string, string> = {
   replicaset: 'rs',
 };
 
+// Whole-phrase rewrites for names that share no words with how people ask.
+const PHRASE_ALIASES: Record<string, string[]> = {
+  'blob storage': ['storage accounts', 'blob'],
+  'azure blob storage': ['azure storage accounts', 'azure blob'],
+};
+
 // The original query plus a variant with each word replaced by its alias.
 function queryVariants(query: string): string[] {
   const q = query.toLowerCase().replace(/[-_]/g, ' ').trim();
@@ -166,6 +173,7 @@ function queryVariants(query: string): string[] {
     .map(w => QUERY_ALIASES[w] ?? w)
     .join(' ');
   variants.add(aliased);
+  for (const extra of PHRASE_ALIASES[q] ?? []) variants.add(extra);
   return [...variants];
 }
 
