@@ -40,12 +40,16 @@ for g in "${GLOBS_IGNORADOS[@]}"; do
   excl_git+=(":!$g")
   excl_lizard+=(-x "./$g")
 done
-excl_jscpd='**/node_modules/**,**/dist/**,**/.next/**,**/build/**,**/*.min.js,**/migrations/**'
+excl_jscpd='**/node_modules/**,**/dist/**,**/.next/**,**/build/**,**/*.min.js,**/migrations/**,**/.github/**'
 for g in "${GLOBS_IGNORADOS[@]}"; do excl_jscpd="$excl_jscpd,$g"; done
 
 # Só arquivos rastreados: gitignore ja tira node_modules, dist e .next de graca.
+#
+# `.github` fica de fora porque e encanamento de CI, nao o produto. Sem isso, um
+# repositorio que vendoriza esta propria action passa a medi-la: o `main` do
+# comparar.py tem CCN 13 e sozinho reprovava o PR que instalava o gate.
 fontes() {
-  git ls-files -- "$@" ':!*.min.js' ':!*.d.ts' ':!**/migrations/**' "${excl_git[@]}"
+  git ls-files -- "$@" ':!*.min.js' ':!*.d.ts' ':!**/migrations/**' ':!.github' "${excl_git[@]}"
 }
 
 TODAS=('*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.py')
@@ -67,6 +71,7 @@ printf 'arquivos_grandes\t%s\n' \
 # CLAUDE.md brigaria com a de funcao curta.
 lizard --csv -l typescript -l javascript -l python \
   -x './node_modules/*' -x './dist/*' -x './.next/*' -x './build/*' \
+  -x './.github/*' \
   "${excl_lizard[@]}" . > "$TMP/lizard.csv" 2>/dev/null
 printf 'funcoes_longas\t%s\n' \
   "$(awk -F, -v lim="$LIMITE_FUNCAO" '$1 > lim' "$TMP/lizard.csv" | wc -l)"
