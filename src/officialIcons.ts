@@ -347,8 +347,11 @@ async function iconifySearch(query: string, limit: number): Promise<Array<Offici
 export async function searchOfficialIcons(query: string, limit = 10): Promise<OfficialIconResult[]> {
   const results = localResults(query);
 
-  if (results.length < limit) {
-    results.push(...await iconifySearch(query, limit - results.length));
+  // Iconify is the documented last resort: only hit the network when no
+  // bundled/standardized source matched at all. Topping results up to `limit`
+  // put a 100-300ms network round-trip on the common path.
+  if (results.length === 0) {
+    results.push(...await iconifySearch(query, limit));
   }
 
   results.sort((a, b) => b._score - a._score);
