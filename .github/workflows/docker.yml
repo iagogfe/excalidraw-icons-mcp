@@ -1,46 +1,72 @@
-name: Docker Build & Push
+# Build, varredura e publicacao das duas imagens no ghcr.io.
+#
+# As duas imagens eram dois jobs quase identicos; viraram uma matriz. Alem de
+# encurtar, garante que uma correcao feita numa nao esqueca a outra.
+#
+# Em PR a imagem e construida so para amd64 e carregada localmente, para o
+# Trivy poder varrer. Multi-arch nao pode ser carregado no daemon local, e
+# construir arm64 por emulacao em todo PR custava minutos sem contrapartida —
+# o multi-arch de verdade so acontece no push, que e quando publica.
+
+name: Docker
 
 on:
   push:
-    branches: [ main ]
-    tags:
-      - 'v*.*.*'
+    branches: [main]
+    tags: ['v*.*.*']
   pull_request:
-    branches: [ main ]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME_MCP: ${{ github.repository }}
-  IMAGE_NAME_CANVAS: ${{ github.repository }}-canvas
 
 jobs:
-  build-and-push-mcp:
-    name: Build and Push MCP Server Image
+  imagem:
+    name: ${{ matrix.nome }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-
+      packages: write # so usado no push; PR de fork nem chega aqui
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nome: MCP server
+            dockerfile: Dockerfile
+            sufixo: ''
+          - nome: Canvas server
+            dockerfile: Dockerfile.canvas
+            sufixo: '-canvas'
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          egress-policy: audit
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
-      - name: Extract metadata for MCP Server
+      - name: Hadolint
+        uses: hadolint/hadolint-action@3fc49fb50d59c6ab7917a2e4195dba633e515b29 # v3.2.0
+        with:
+          dockerfile: ${{ matrix.dockerfile }}
+          # Reprova so em `error`. O default e `info`, que barra ate DL3018
+          # ("pin versions in apk add") — ruido que faria desligarem o gate.
+          failure-threshold: error
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Metadados das tags
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_MCP }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}${{ matrix.sufixo }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -50,98 +76,98 @@ jobs:
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push MCP Server image
-        uses: docker/build-push-action@v5
+      # ---------- PR: construir local e varrer, sem publicar ----------
+      - name: Build local para varredura
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
-          file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          file: ${{ matrix.dockerfile }}
+          load: true
+          tags: scan:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
 
-  build-and-push-canvas:
-    name: Build and Push Canvas Server Image
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+      - name: Trivy (CVEs na imagem)
+        if: github.event_name == 'pull_request'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: scan:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+      # ---------- push: multi-arch e publicacao ----------
+      - name: Login no ghcr.io
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for Canvas Server
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_CANVAS }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Canvas Server image
-        uses: docker/build-push-action@v5
+      - name: Build multi-arch e push
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
-          file: ./Dockerfile.canvas
-          push: ${{ github.event_name != 'pull_request' }}
+          file: ${{ matrix.dockerfile }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
-  test-docker-images:
-    name: Test Docker Images
-    needs: [build-and-push-mcp, build-and-push-canvas]
+  misconfig:
+    name: Misconfig (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+  fumaca:
+    name: Teste de fumaca do canvas
+    needs: imagem
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      packages: read
     steps:
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Determine image tag
-        id: tag
+      - name: Subir o canvas e bater no /health
+        env:
+          # A tag por SHA e a unica que existe em qualquer evento de push —
+          # `github.ref_name` num push de tag e a tag, e num push de branch e a
+          # branch, e nem toda combinacao vira tag de imagem.
+          IMAGEM: ${{ env.REGISTRY }}/${{ github.repository }}-canvas:sha-${{ github.sha }}
         run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "value=pr-${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
-          else
-            echo "value=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Test Canvas Server image
-        run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_CANVAS }}:${{ steps.tag.outputs.value }}
-          docker run -d -p 3000:3000 --name test-canvas ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_CANVAS }}:${{ steps.tag.outputs.value }}
-          sleep 10
-          curl -f http://localhost:3000/health || exit 1
-          docker logs test-canvas
-          docker stop test-canvas
-
-      - name: Test MCP Server image
-        run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_MCP }}:${{ steps.tag.outputs.value }}
-          echo "MCP Server image pulled successfully"
+          set -euo pipefail
+          docker run -d -p 3000:3000 --name canvas "$IMAGEM"
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:3000/health > /dev/null; then
+              echo "canvas respondeu em ${i}s"
+              docker rm -f canvas
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::canvas nao respondeu em /health apos 20s"
+          docker logs canvas
+          exit 1

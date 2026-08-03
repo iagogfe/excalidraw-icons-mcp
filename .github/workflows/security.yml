@@ -1,0 +1,89 @@
+# Segredos, dependencias e SAST.
+#
+# Separado do CI de proposito: em repositorio publico cada job vira um "check"
+# nomeado que qualquer pessoa ve no PR, e ter "Segredos", "Dependencias" e
+# "SAST" como nomes proprios diz mais a um contribuidor de fora do que um CI
+# monolitico vermelho.
+
+name: Seguranca
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # CVE nova aparece sem ninguem commitar nada.
+    - cron: '31 5 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  segredos:
+    name: Segredos (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # segredo commitado e removido depois continua vazado
+      - name: Gitleaks
+        # CLI direto, nao a gitleaks-action: a action chama a API do GitHub para
+        # comentar no PR e exigiria permissao que PR de fork nao tem. O binario
+        # sozinho nao precisa de token nenhum.
+        # Versao >= 8.25.0 e obrigatoria: e a partir dela que vale o schema
+        # `[[allowlists]]`; antes disso um .gitleaks.toml e ignorado em silencio.
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            detect --source=. --redact --no-banner --verbose
+
+  dependencias:
+    name: Dependencias (osv-scanner)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+
+  semgrep:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:1.172.0@sha256:65dcd4408adda7c183a6b4550cb1e9b19f7f627a6fbb7e0559bd466bedc44d7b
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - run: semgrep scan --config auto --error
+
+  codeql:
+    name: SAST (CodeQL)
+    # Analise semantica do proprio GitHub, gratuita apenas em repositorio
+    # publico. Complementa o Semgrep em vez de substituir: o CodeQL segue fluxo
+    # de dados entre arquivos, onde o Semgrep casa padrao local.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write # publica os alertas na aba Security
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@e60ea984bd3baa95954f2856bcf24f9eaba46637 # v3
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+      - uses: github/codeql-action/analyze@e60ea984bd3baa95954f2856bcf24f9eaba46637 # v3

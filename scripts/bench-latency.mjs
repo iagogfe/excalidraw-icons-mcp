@@ -20,6 +20,10 @@ const canvas = spawn('node', ['dist/server.js'], {
 let up = false;
 for (let i = 0; i < 50; i++) {
   try {
+    // Script de benchmark local: bate no canvas que ele mesmo acabou de subir
+    // em loopback, algumas linhas acima. HTTPS exigiria certificado para medir
+    // latencia contra o proprio processo.
+    // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request
     const r = await fetch(`${BASE}/api/elements`);
     if (r.ok) { up = true; break; }
   } catch { /* not yet */ }

@@ -3,7 +3,7 @@
 # The canvas server is optional and runs separately
 
 # Stage 1: Build backend (TypeScript compilation)
-FROM node:18-slim AS builder
+FROM node:22-slim AS builder
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ COPY tsconfig.json ./
 RUN npm run build:server
 
 # Stage 2: Production MCP Server
-FROM node:18-slim AS production
+FROM node:22-slim AS production
 
 # Create non-root user for security
 RUN addgroup --system --gid 1001 nodejs && \
@@ -33,7 +33,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force && \
+    rm -rf /usr/local/lib/node_modules/npm
 
 # Copy compiled backend (MCP server only)
 COPY --from=builder /app/dist ./dist
@@ -53,6 +54,6 @@ ENV ENABLE_CANVAS_SYNC=true
 CMD ["node", "dist/index.js"]
 
 # Labels for metadata
-LABEL org.opencontainers.image.source="https://github.com/yctimlin/mcp_excalidraw"
+LABEL org.opencontainers.image.source="https://github.com/iagogfe/excalidraw-icons-mcp"
 LABEL org.opencontainers.image.description="MCP Excalidraw Server - Model Context Protocol for AI agents"
 LABEL org.opencontainers.image.licenses="MIT"
