@@ -12,6 +12,16 @@ version: '3.8'
 services:
   # Canvas server (optional) - Visual UI and REST API
   canvas:
+    # `no-new-privileges` impede escalonamento por binario setuid; nao muda
+    # nada em como o servico roda.
+    #
+    # O Semgrep tambem pede `read_only: true`, que nao esta aqui: o servidor
+    # escreve o cache de bibliotecas em ~/.cache (ver getCacheDir em
+    # src/libraries.ts). Ligar sem montar um tmpfs no home do usuario `nodejs`
+    # quebraria o servico em runtime, e nao ha teste de container que pegasse.
+    # nosemgrep: yaml.docker-compose.security.writable-filesystem-service.writable-filesystem-service
+    security_opt:
+      - no-new-privileges:true
     build:
       context: .
       dockerfile: Dockerfile.canvas
@@ -37,6 +47,16 @@ services:
   # MCP server - Core product (typically run via Claude Desktop, not docker-compose)
   # This is here for testing or special deployment scenarios
   mcp:
+    # `no-new-privileges` impede escalonamento por binario setuid; nao muda
+    # nada em como o servico roda.
+    #
+    # O Semgrep tambem pede `read_only: true`, que nao esta aqui: o servidor
+    # escreve o cache de bibliotecas em ~/.cache (ver getCacheDir em
+    # src/libraries.ts). Ligar sem montar um tmpfs no home do usuario `nodejs`
+    # quebraria o servico em runtime, e nao ha teste de container que pegasse.
+    # nosemgrep: yaml.docker-compose.security.writable-filesystem-service.writable-filesystem-service
+    security_opt:
+      - no-new-privileges:true
     build:
       context: .
       dockerfile: Dockerfile

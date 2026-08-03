@@ -3,6 +3,11 @@
 # repositorio publico nao consegue ler. O Dependabot e nativo, nao exige app
 # instalado, e sabe atualizar SHA pinado de action junto com o comentario da
 # versao ao lado — que e exatamente como as actions estao fixadas aqui.
+#
+# O `cooldown` repete em cada ecossistema de proposito: e por entrada, nao
+# global. Ele segura uma versao recem-publicada antes de propo-la, porque
+# pacote malicioso costuma ser despublicado em horas — sem a carencia, o bot
+# abriria o PR com a versao comprometida antes de alguem notar.
 
 version: 2
 updates:
@@ -10,6 +15,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
     groups:
       actions:
         patterns: ['*']
@@ -18,9 +26,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    # Espera antes de propor uma versao recem-publicada. Pacote npm malicioso
-    # costuma ser despublicado em horas, e sem essa carencia o Dependabot abre
-    # o PR que traz a versao comprometida antes de alguem notar.
     cooldown:
       default-days: 7
       semver-major-days: 30
@@ -36,3 +41,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30

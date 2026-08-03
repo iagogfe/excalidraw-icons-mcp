@@ -33,6 +33,10 @@ dotenv.config();
 const ALLOWED_EXPORT_DIR = process.env.EXCALIDRAW_EXPORT_DIR || process.cwd();
 
 function sanitizeFilePath(filePath: string): string {
+  // O Semgrep aponta este resolve, mas ele e a propria mitigacao: resolver e o
+  // primeiro passo obrigatorio para poder comparar com o diretorio permitido
+  // logo abaixo. Sem resolver antes, a comparacao seria burlavel por `..`.
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
   const resolved = path.resolve(filePath);
   const allowedDir = path.resolve(ALLOWED_EXPORT_DIR);
   if (!resolved.startsWith(allowedDir + path.sep) && resolved !== allowedDir) {
@@ -2616,6 +2620,10 @@ function resolveEntrypointPath(filePath: string | undefined): string | null {
         error: error instanceof Error ? error.message : String(error)
       });
     }
+    // O argumento aqui e o caminho do proprio processo (process.argv[1] e
+    // import.meta.url), usado so para decidir se este arquivo foi executado
+    // diretamente. Nao ha entrada de agente neste caminho.
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     return path.resolve(filePath);
   }
 }
