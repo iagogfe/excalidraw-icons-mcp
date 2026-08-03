@@ -270,15 +270,23 @@ function simpleIconsIndex(): SimpleIconEntry[] {
 function localResults(query: string): Array<OfficialIconResult & { _score: number }> {
   const results: Array<OfficialIconResult & { _score: number }> = [];
   const variants = queryVariants(query);
-  const scoreAll = (n: Norm): number =>
-    Math.max(...variants.map(v => scoreNorm(v, n)));
+  const scoreAll = (n: Norm): number => {
+    let best = 0;
+    for (const v of variants) {
+      const s = scoreNorm(v, n);
+      if (s > best) best = s;
+    }
+    return best;
+  };
 
   for (const item of localIndex()) {
-    const s = scoreAll(item.nameNorm) || scoreAll(item.domainNameNorm);
-    if (s > 0) {
-      const { nameNorm, domainNameNorm, ...pub } = item;
-      results.push({ ...pub, _score: s });
-    }
+    // name is a substring of domain+name, so a zero here rules the entry out
+    // without scoring the name — misses (the bulk of the index) scan once.
+    const d = scoreAll(item.domainNameNorm);
+    if (d === 0) continue;
+    const s = scoreAll(item.nameNorm) || d;
+    const { nameNorm, domainNameNorm, ...pub } = item;
+    results.push({ ...pub, _score: s });
   }
 
   for (const entry of simpleIconsIndex()) {
