@@ -42,7 +42,44 @@ function titleCaseFromFilename(file: string): string {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function walkSvgs(dir: string, domain: string, out: OfficialIconResult[]): void {
+// The bundled Kubernetes pack names files by kubectl short name (svc.svg,
+// deploy.svg, cm.svg). Index them under the full resource name so natural
+// queries ("kubernetes service", "deployment") match.
+const K8S_NAME_EXPANSIONS: Record<string, string> = {
+  'svc': 'Service',
+  'deploy': 'Deployment',
+  'cm': 'ConfigMap',
+  'sts': 'StatefulSet',
+  'ds': 'DaemonSet',
+  'ing': 'Ingress',
+  'ns': 'Namespace',
+  'sa': 'Service Account',
+  'pv': 'Persistent Volume',
+  'pvc': 'Persistent Volume Claim',
+  'hpa': 'Horizontal Pod Autoscaler',
+  'crd': 'Custom Resource Definition',
+  'rs': 'ReplicaSet',
+  'rb': 'Role Binding',
+  'crb': 'Cluster Role Binding',
+  'c-role': 'Cluster Role',
+  'sc': 'Storage Class',
+  'ep': 'Endpoint',
+  'netpol': 'Network Policy',
+  'psp': 'Pod Security Policy',
+  'limits': 'Limit Range',
+  'quota': 'Resource Quota',
+  'vol': 'Volume',
+  'api': 'API Server',
+  'c-m': 'Controller Manager',
+  'c-c-m': 'Cloud Controller Manager',
+  'k-proxy': 'Kube Proxy',
+  'sched': 'Scheduler',
+};
+
+// Index entries carry their normalized forms, computed once at index build.
+type IndexedIcon = OfficialIconResult & { nameNorm: Norm; domainNameNorm: Norm };
+
+function walkSvgs(dir: string, domain: string, out: IndexedIcon[]): void {
   if (!fs.existsSync(dir)) return;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
@@ -50,21 +87,26 @@ function walkSvgs(dir: string, domain: string, out: OfficialIconResult[]): void 
       walkSvgs(full, domain, out);
     } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.svg')) {
       const rel = path.relative(ICONS_ROOT, full);
+      const base = path.basename(entry.name, '.svg');
+      const expanded = domain === 'kubernetes' ? K8S_NAME_EXPANSIONS[base] : undefined;
+      const name = expanded ?? titleCaseFromFilename(entry.name);
       out.push({
         ref: `local:${rel}`,
-        name: titleCaseFromFilename(entry.name),
+        name,
         domain,
         source: `bundled icons/${domain}`,
+        nameNorm: normName(name),
+        domainNameNorm: normName(domain + ' ' + name),
       });
     }
   }
 }
 
-let localIndexCache: OfficialIconResult[] | null = null;
+let localIndexCache: IndexedIcon[] | null = null;
 
-function localIndex(): OfficialIconResult[] {
+function localIndex(): IndexedIcon[] {
   if (localIndexCache) return localIndexCache;
-  const out: OfficialIconResult[] = [];
+  const out: IndexedIcon[] = [];
   if (fs.existsSync(ICONS_ROOT)) {
     for (const domain of fs.readdirSync(ICONS_ROOT)) {
       const domainDir = path.join(ICONS_ROOT, domain);
@@ -77,44 +119,182 @@ function localIndex(): OfficialIconResult[] {
   return out;
 }
 
-let tablerIndexCache: string[] | null = null;
+interface TablerEntry {
+  file: string;
+  name: string;
+  nameNorm: Norm;
+}
 
-function tablerIndex(): string[] {
+let tablerIndexCache: TablerEntry[] | null = null;
+
+function tablerIndex(): TablerEntry[] {
   if (tablerIndexCache) return tablerIndexCache;
   tablerIndexCache = fs.existsSync(TABLER_ROOT)
-    ? fs.readdirSync(TABLER_ROOT).filter(f => f.endsWith('.svg'))
+    ? fs.readdirSync(TABLER_ROOT)
+        .filter(f => f.endsWith('.svg'))
+        .map(file => {
+          const name = titleCaseFromFilename(file);
+          return { file, name, nameNorm: normName(name) };
+        })
     : [];
   return tablerIndexCache;
 }
 
-function score(query: string, name: string): number {
-  const q = query.toLowerCase().replace(/[-_]/g, ' ').trim();
-  const n = name.toLowerCase().replace(/[-_]/g, ' ').trim();
-  if (n === q) return 100;
-  if (n.startsWith(q)) return 80;
-  if (n.includes(q)) return 60;
-  const qWords = q.split(/\s+/);
-  if (qWords.every(w => n.includes(w))) return 40;
-  return 0;
+// Lowercase, split, and singularize each word (naive trailing-s strip) so
+// "app service" matches "App Services" and "azure functions" matches
+// "Function Apps". Applied to both sides, so over-stripping stays consistent.
+function normWords(s: string): string[] {
+  return s
+    .toLowerCase()
+    .replace(/[-_]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(w => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w));
 }
 
-function localResults(query: string): Array<OfficialIconResult & { _score: number }> {
-  const results: Array<OfficialIconResult & { _score: number }> = [];
+// Vendor-pack filename furniture, not meaning: "Arch_Amazon-EC2_48" ranks the
+// same as "Amazon EC2".
+const NOISE_WORDS = new Set(['arch', 'res', '16', '32', '48', '64']);
 
-  for (const item of localIndex()) {
-    const s = score(query, item.name) || score(query, item.domain + ' ' + item.name);
-    if (s > 0) results.push({ ...item, _score: s });
-  }
+// Normalization is the hot path of a search (it runs against every indexed
+// name), so it is computed once per index entry and once per query — never
+// per (query, name) pair.
+interface Norm {
+  words: string[];
+  joined: string;
+}
 
+function normName(s: string): Norm {
+  const words = normWords(s).filter(w => !NOISE_WORDS.has(w));
+  return { words, joined: words.join(' ') };
+}
+
+function normQuery(s: string): Norm {
+  const words = normWords(s);
+  return { words, joined: words.join(' ') };
+}
+
+function scoreNorm(q: Norm, n: Norm): number {
+  if (!q.joined || !n.joined) return 0;
+
+  let rung = 0;
+  if (n.joined === q.joined) rung = 100;
+  else if (n.joined.startsWith(q.joined)) rung = 80;
+  else if (n.joined.includes(q.joined)) rung = 60;
+  else if (q.words.every(w => n.joined.includes(w))) rung = 40;
+  if (rung === 0) return 0;
+
+  // Precision bonus (0..10): among equally-matching names, the one with fewer
+  // leftover words wins — "Amazon Simple Storage Service" beats
+  // "Amazon Simple Storage Service Glacier" for "s3".
+  const matched = n.words.filter(w => q.words.some(qw => w.includes(qw) || qw.includes(w))).length;
+  return rung + 10 * (matched / Math.max(n.words.length, 1));
+}
+
+// How agents phrase things ↔ how vendor packs name their files. Expanding the
+// query (not the index) keeps the dictionary small and applies to every source.
+const QUERY_ALIASES: Record<string, string> = {
+  // AWS acronyms → official file wording
+  s3: 'simple storage service',
+  sqs: 'simple queue service',
+  sns: 'simple notification service',
+  eks: 'elastic kubernetes service',
+  ecs: 'elastic container service',
+  ecr: 'elastic container registry',
+  ebs: 'elastic block store',
+  efs: 'elastic file system',
+  alb: 'application load balancer',
+  elb: 'elastic load balancing',
+  // Other clouds
+  gke: 'google kubernetes engine',
+  aks: 'kubernetes services',
+  vm: 'virtual machine',
+  k8s: 'kubernetes',
+  oci: 'oracle',
+  // Kubernetes resources → kubectl short names used by the bundled pack files
+  deployment: 'deploy',
+  configmap: 'cm',
+  statefulset: 'sts',
+  daemonset: 'ds',
+  ingress: 'ing',
+  namespace: 'ns',
+  serviceaccount: 'sa',
+  persistentvolume: 'pv',
+  persistentvolumeclaim: 'pvc',
+  replicaset: 'rs',
+};
+
+// Whole-phrase rewrites for names that share no words with how people ask.
+const PHRASE_ALIASES: Record<string, string[]> = {
+  'blob storage': ['storage accounts', 'blob'],
+  'azure blob storage': ['azure storage accounts', 'azure blob'],
+};
+
+// The original query plus a variant with each word replaced by its alias,
+// each pre-normalized once.
+function queryVariants(query: string): Norm[] {
+  const q = query.toLowerCase().replace(/[-_]/g, ' ').trim();
+  const variants = new Set([q]);
+  const aliased = q
+    .split(/\s+/)
+    .map(w => QUERY_ALIASES[w] ?? w)
+    .join(' ');
+  variants.add(aliased);
+  for (const extra of PHRASE_ALIASES[q] ?? []) variants.add(extra);
+  return [...variants].map(normQuery);
+}
+
+interface SimpleIconEntry {
+  slug: string;
+  title: string;
+  titleNorm: Norm;
+  slugNorm: Norm;
+}
+
+let simpleIconsIndexCache: SimpleIconEntry[] | null = null;
+
+function simpleIconsIndex(): SimpleIconEntry[] {
+  if (simpleIconsIndexCache) return simpleIconsIndexCache;
+  const out: SimpleIconEntry[] = [];
   for (const [key, icon] of Object.entries(simpleIcons)) {
     if (!key.startsWith('si')) continue;
     const title = (icon as any).title as string;
     const slug = (icon as any).slug as string;
-    const s = Math.max(score(query, title), score(query, slug));
+    out.push({ slug, title, titleNorm: normName(title), slugNorm: normName(slug) });
+  }
+  simpleIconsIndexCache = out;
+  return out;
+}
+
+function localResults(query: string): Array<OfficialIconResult & { _score: number }> {
+  const results: Array<OfficialIconResult & { _score: number }> = [];
+  const variants = queryVariants(query);
+  const scoreAll = (n: Norm): number => {
+    let best = 0;
+    for (const v of variants) {
+      const s = scoreNorm(v, n);
+      if (s > best) best = s;
+    }
+    return best;
+  };
+
+  for (const item of localIndex()) {
+    // name is a substring of domain+name, so a zero here rules the entry out
+    // without scoring the name — misses (the bulk of the index) scan once.
+    const d = scoreAll(item.domainNameNorm);
+    if (d === 0) continue;
+    const s = scoreAll(item.nameNorm) || d;
+    const { nameNorm, domainNameNorm, ...pub } = item;
+    results.push({ ...pub, _score: s });
+  }
+
+  for (const entry of simpleIconsIndex()) {
+    const s = Math.max(scoreAll(entry.titleNorm), scoreAll(entry.slugNorm));
     if (s > 0) {
       results.push({
-        ref: `simple-icons:${slug}`,
-        name: title,
+        ref: `simple-icons:${entry.slug}`,
+        name: entry.title,
         domain: 'logo',
         source: 'simple-icons (CC0)',
         _score: s - 5, // local/bundled architecture icons rank slightly above generic logos
@@ -122,13 +302,12 @@ function localResults(query: string): Array<OfficialIconResult & { _score: numbe
     }
   }
 
-  for (const file of tablerIndex()) {
-    const name = titleCaseFromFilename(file);
-    const s = score(query, name);
+  for (const entry of tablerIndex()) {
+    const s = scoreAll(entry.nameNorm);
     if (s > 0) {
       results.push({
-        ref: `tabler:${file}`,
-        name,
+        ref: `tabler:${entry.file}`,
+        name: entry.name,
         domain: 'generic',
         source: '@tabler/icons (MIT)',
         _score: s - 2, // rank between bundled-official (0) and simple-icons (-5)
@@ -168,8 +347,11 @@ async function iconifySearch(query: string, limit: number): Promise<Array<Offici
 export async function searchOfficialIcons(query: string, limit = 10): Promise<OfficialIconResult[]> {
   const results = localResults(query);
 
-  if (results.length < limit) {
-    results.push(...await iconifySearch(query, limit - results.length));
+  // Iconify is the documented last resort: only hit the network when no
+  // bundled/standardized source matched at all. Topping results up to `limit`
+  // put a 100-300ms network round-trip on the common path.
+  if (results.length === 0) {
+    results.push(...await iconifySearch(query, limit));
   }
 
   results.sort((a, b) => b._score - a._score);

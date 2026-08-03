@@ -36,3 +36,13 @@ icons/gcp/
 icons/network/
 icons/oracle/
 .firecrawl/
+node_modules
+results.tsv
+autosearch-hitl-results.tsv
+.env
+.env.*
+icons
+node_modules
+results.tsv
+.env
+.env.*
