@@ -5,16 +5,10 @@ process.env.NODE_DISABLE_COLORS = '1';
 process.env.NO_COLOR = '1';
 
 import { fileURLToPath } from "url";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
+import { Server, CallToolRequest, Tool } from "@modelcontextprotocol/server";
 import { deflateSync } from 'zlib';
 import { webcrypto } from 'crypto';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { 
-  CallToolRequestSchema, 
-  ListToolsRequestSchema,
-  CallToolRequest,
-  Tool
-} from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import dotenv from 'dotenv';
 import fs from 'fs';
@@ -289,7 +283,7 @@ const DistributeElementsSchema = z.object({
 
 const QuerySchema = z.object({
   type: z.enum(Object.values(EXCALIDRAW_ELEMENT_TYPES) as [ExcalidrawElementType, ...ExcalidrawElementType[]]).optional(),
-  filter: z.record(z.any()).optional(),
+  filter: z.record(z.string(), z.any()).optional(),
   bbox: z.object({
     x_min: z.number().optional(),
     x_max: z.number().optional(),
@@ -504,7 +498,7 @@ const ELEMENT_PROPERTIES = {
   startArrowhead: { type: 'string', description: 'Arrowhead style at start: arrow, bar, dot, triangle, or null' },
   fileId: { type: 'string', description: 'For type:"image" elements: id of a file uploaded via add_image. Required to render the image.' },
   scale: { type: 'array', description: 'For type:"image" elements: [scaleX, scaleY], usually [1, 1].' }
-} as const;
+};
 
 // Tool definitions
 const tools: Tool[] = [
@@ -1045,7 +1039,7 @@ function convertTextToLabel(element: ServerElement): ServerElement {
 }
 
 // Set up request handler for tool calls
-server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
+server.setRequestHandler('tools/call', async (request: CallToolRequest) => {
   try {
     const { name, arguments: args } = request.params;
     logger.info(`Handling tool call: ${name}`);
@@ -2568,7 +2562,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 });
 
 // Set up request handler for listing available tools
-server.setRequestHandler(ListToolsRequestSchema, async () => {
+server.setRequestHandler('tools/list', async () => {
   logger.info('Listing available tools');
   return { tools };
 });
@@ -2578,13 +2572,10 @@ async function runServer(): Promise<void> {
   try {
     logger.info('Starting Excalidraw MCP server...');
 
-    const transport = new StdioServerTransport();
-    logger.debug('Connecting to stdio transport...');
-
-    await server.connect(transport);
+    // serveStdio owns the transport and pins the connection's protocol era:
+    // 2026-07-28 for modern clients, 2025-era for legacy initialize handshakes.
+    serveStdio(() => server);
     logger.info('Excalidraw MCP server running on stdio');
-
-    process.stdin.resume();
   } catch (error) {
     logger.error('Error starting server:', error);
     process.stderr.write(`Failed to start MCP server: ${(error as Error).message}\n${(error as Error).stack}\n`);
