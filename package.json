@@ -86,7 +86,8 @@
   "files": [
     "src/**/*",
     "dist/**/*",
-    "icons/**/*",
+    "icons/kubernetes/**/*",
+    "icons/*/README.md",
     "*.d.ts",
     "README.md",
     "LICENSE"
