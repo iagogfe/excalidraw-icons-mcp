@@ -42,6 +42,40 @@ function titleCaseFromFilename(file: string): string {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
+// The bundled Kubernetes pack names files by kubectl short name (svc.svg,
+// deploy.svg, cm.svg). Index them under the full resource name so natural
+// queries ("kubernetes service", "deployment") match.
+const K8S_NAME_EXPANSIONS: Record<string, string> = {
+  'svc': 'Service',
+  'deploy': 'Deployment',
+  'cm': 'ConfigMap',
+  'sts': 'StatefulSet',
+  'ds': 'DaemonSet',
+  'ing': 'Ingress',
+  'ns': 'Namespace',
+  'sa': 'Service Account',
+  'pv': 'Persistent Volume',
+  'pvc': 'Persistent Volume Claim',
+  'hpa': 'Horizontal Pod Autoscaler',
+  'crd': 'Custom Resource Definition',
+  'rs': 'ReplicaSet',
+  'rb': 'Role Binding',
+  'crb': 'Cluster Role Binding',
+  'c-role': 'Cluster Role',
+  'sc': 'Storage Class',
+  'ep': 'Endpoint',
+  'netpol': 'Network Policy',
+  'psp': 'Pod Security Policy',
+  'limits': 'Limit Range',
+  'quota': 'Resource Quota',
+  'vol': 'Volume',
+  'api': 'API Server',
+  'c-m': 'Controller Manager',
+  'c-c-m': 'Cloud Controller Manager',
+  'k-proxy': 'Kube Proxy',
+  'sched': 'Scheduler',
+};
+
 function walkSvgs(dir: string, domain: string, out: OfficialIconResult[]): void {
   if (!fs.existsSync(dir)) return;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -50,9 +84,11 @@ function walkSvgs(dir: string, domain: string, out: OfficialIconResult[]): void 
       walkSvgs(full, domain, out);
     } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.svg')) {
       const rel = path.relative(ICONS_ROOT, full);
+      const base = path.basename(entry.name, '.svg');
+      const expanded = domain === 'kubernetes' ? K8S_NAME_EXPANSIONS[base] : undefined;
       out.push({
         ref: `local:${rel}`,
-        name: titleCaseFromFilename(entry.name),
+        name: expanded ?? titleCaseFromFilename(entry.name),
         domain,
         source: `bundled icons/${domain}`,
       });
