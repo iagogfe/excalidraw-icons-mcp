@@ -1282,6 +1282,11 @@ async function startServer(): Promise<void> {
   server.listen(PORT, HOST, () => {
     const hostForUrl = formatHostForUrl(HOST);
     logger.info(`POC server running on http://${hostForUrl}:${PORT}`);
+    // Linha de log, nao uma conexao: imprime o endereco onde o canvas escuta.
+    // O canvas e um servidor local que o cliente MCP acessa em loopback, entao
+    // nao ha TLS para anunciar — quem o expuser na rede coloca um proxy na
+    // frente e termina o TLS ali.
+    // nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket
     logger.info(`WebSocket server running on ws://${hostForUrl}:${PORT}`);
   });
 }

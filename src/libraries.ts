@@ -210,8 +210,36 @@ async function fetchJson(url: string): Promise<any> {
   return resp.json();
 }
 
+/**
+ * Resolve a cache file name against the cache directory, refusing any name that
+ * escapes it.
+ *
+ * Cache names are built from `statsKey`, which strips `/` while formatting keys
+ * for stats.json. That blocks traversal today, but by accident rather than by
+ * design — and only on POSIX, since a `\` survives it and separates paths on
+ * Windows, where this server also runs. Stating the guarantee here means a
+ * future change to the key format cannot remove it silently.
+ *
+ * @example cachePath('lib-dwelle-network.json') // -> '<cache dir>/lib-dwelle-network.json'
+ */
+export function cachePath(fileName: string): string {
+  const dir = path.resolve(getCacheDir());
+  // Juntar e resolver e o que torna a checagem abaixo possivel: e o caminho ja
+  // resolvido que se compara com o diretorio, e um nome com `..` sai da
+  // comparacao e cai no throw. Coberto por scripts/test-cache-path.mjs.
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+  const resolved = path.resolve(path.join(dir, fileName));
+  if (resolved !== dir && !resolved.startsWith(dir + path.sep)) {
+    throw new Error(
+      `Invalid cache file name: "${fileName}" resolves to "${resolved}", outside the cache ` +
+      `directory "${dir}". Expected a plain file name with no path separators.`
+    );
+  }
+  return resolved;
+}
+
 function readCacheFile(fileName: string): { data: any; ageMs: number } | null {
-  const fp = path.join(getCacheDir(), fileName);
+  const fp = cachePath(fileName);
   if (!fs.existsSync(fp)) return null;
   try {
     return { data: JSON.parse(fs.readFileSync(fp, 'utf8')), ageMs: Date.now() - fs.statSync(fp).mtimeMs };
@@ -221,8 +249,9 @@ function readCacheFile(fileName: string): { data: any; ageMs: number } | null {
 }
 
 function writeCacheFile(fileName: string, data: any): void {
+  const fp = cachePath(fileName);
   fs.mkdirSync(getCacheDir(), { recursive: true });
-  fs.writeFileSync(path.join(getCacheDir(), fileName), JSON.stringify(data));
+  fs.writeFileSync(fp, JSON.stringify(data));
 }
 
 /** TTL'd fetch-through cache; falls back to stale cache when offline. */
@@ -258,7 +287,7 @@ export async function loadLibrary(entry: LibraryManifestEntry): Promise<Excalidr
 }
 
 function isLibraryCached(source: string): boolean {
-  return fs.existsSync(path.join(getCacheDir(), `lib-${statsKey(source)}.json`));
+  return fs.existsSync(cachePath(`lib-${statsKey(source)}.json`));
 }
 
 /**

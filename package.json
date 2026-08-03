@@ -21,7 +21,8 @@
     "test:libraries": "npm run build:server && node scripts/test-libraries.mjs",
     "test:conventions": "npm run build:server && node scripts/test-conventions.mjs",
     "type-check": "npx tsc --noEmit",
-    "test:arrow-drag": "npm run build && node scripts/test-arrow-drag.mjs"
+    "test:arrow-drag": "npm run build && node scripts/test-arrow-drag.mjs",
+    "test:cache-path": "npm run build:server && node scripts/test-cache-path.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.0",
@@ -91,5 +92,11 @@
     "*.d.ts",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "overrides": {
+    "lodash-es": "^4.18.0",
+    "@excalidraw/excalidraw": {
+      "nanoid": "^3.3.8"
+    }
+  }
 }

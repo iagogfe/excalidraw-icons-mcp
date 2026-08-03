@@ -82,6 +82,10 @@ type IndexedIcon = OfficialIconResult & { nameNorm: Norm; domainNameNorm: Norm }
 function walkSvgs(dir: string, domain: string, out: IndexedIcon[]): void {
   if (!fs.existsSync(dir)) return;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    // `entry.name` vem do readdir, ou seja, do proprio sistema de arquivos —
+    // nao ha entrada de agente nesta juncao. A raiz varrida e ICONS_ROOT, que
+    // e constante do pacote.
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       walkSvgs(full, domain, out);
@@ -410,7 +414,12 @@ export function recolorSvg(svg: string, color: string): string {
 export async function resolveIconRef(ref: string): Promise<{ data: Buffer; mimeType: string }> {
   if (ref.startsWith('local:')) {
     const rel = ref.slice('local:'.length);
+    // Juntar e resolver sao os dois passos que a checagem logo abaixo precisa
+    // para existir: e o resultado resolvido que e comparado com ICONS_ROOT, e
+    // um ref com `..` sai da comparacao e cai no throw.
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     const full = path.join(ICONS_ROOT, rel);
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     const resolved = path.resolve(full);
     if (!resolved.startsWith(path.resolve(ICONS_ROOT) + path.sep)) {
       throw new Error(`Invalid icon ref: "${ref}" resolves outside the icons directory`);
@@ -426,6 +435,9 @@ export async function resolveIconRef(ref: string): Promise<{ data: Buffer; mimeT
   }
   if (ref.startsWith('tabler:')) {
     const file = ref.slice('tabler:'.length);
+    // Mesmo padrao do ramo `local:` acima: o resolve alimenta a checagem da
+    // linha seguinte, que rejeita qualquer ref que saia de TABLER_ROOT.
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     const resolved = path.resolve(path.join(TABLER_ROOT, file));
     if (!resolved.startsWith(path.resolve(TABLER_ROOT) + path.sep)) {
       throw new Error(`Invalid icon ref: "${ref}"`);
