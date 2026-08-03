@@ -11,7 +11,14 @@ version: '3.8'
 
 services:
   # Canvas server (optional) - Visual UI and REST API
+  # O Semgrep pede `read_only: true` aqui. Fica de fora porque o servidor
+  # escreve o cache de bibliotecas em ~/.cache (getCacheDir, em
+  # src/libraries.ts): ligar sem montar tmpfs no home do usuario `nodejs`
+  # quebraria o servico em runtime, e nenhum teste de container pegaria.
+  # nosemgrep: yaml.docker-compose.security.writable-filesystem-service.writable-filesystem-service
   canvas:
+    security_opt:
+      - no-new-privileges:true
     build:
       context: .
       dockerfile: Dockerfile.canvas
@@ -36,7 +43,14 @@ services:
 
   # MCP server - Core product (typically run via Claude Desktop, not docker-compose)
   # This is here for testing or special deployment scenarios
+  # O Semgrep pede `read_only: true` aqui. Fica de fora porque o servidor
+  # escreve o cache de bibliotecas em ~/.cache (getCacheDir, em
+  # src/libraries.ts): ligar sem montar tmpfs no home do usuario `nodejs`
+  # quebraria o servico em runtime, e nenhum teste de container pegaria.
+  # nosemgrep: yaml.docker-compose.security.writable-filesystem-service.writable-filesystem-service
   mcp:
+    security_opt:
+      - no-new-privileges:true
     build:
       context: .
       dockerfile: Dockerfile

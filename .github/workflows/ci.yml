@@ -1,75 +1,94 @@
+# Build, type-check e gate de estilo.
+#
+# Este repositorio e publico, entao a pipeline e autocontida: um repositorio
+# publico nao consegue chamar reusable workflow de repositorio privado, o que
+# descarta reaproveitar `shared workflow repository` aqui.
+#
+# Actions de terceiros pinadas por SHA completo — tag e mutavel, e foi o vetor
+# dos ataques tj-actions (mar/2025) e trivy-action (mar/2026). O Dependabot
+# atualiza os SHAs e o comentario da versao junto.
+
 name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  build-and-test:
-    name: Build and Type Check
+  build:
+    name: Build (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
-
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [18.x, 20.x, 22.x]
-
+        # `engines` do package.json exige >= 20, e o Node 18 saiu do suporte em
+        # abril/2025 — testar nele dava um verde que nao valia nada.
+        node: ['20', '22', '24']
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
         with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'npm'
+          egress-policy: audit
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run TypeScript type check
+      - run: npm ci
+      - name: Type check
         run: npm run type-check
-
-      - name: Build project
+      - name: Build
         run: npm run build
 
-      - name: Check build artifacts
+      - name: Conferir os artefatos de build
+        # O `files` do package.json publica `dist/`, entao um build que gera
+        # menos que isto quebraria o pacote sem quebrar o build.
         run: |
-          echo "Checking if build artifacts exist..."
-          test -f dist/index.js || (echo "dist/index.js not found" && exit 1)
-          test -f dist/server.js || (echo "dist/server.js not found" && exit 1)
-          test -d dist/frontend || (echo "dist/frontend not found" && exit 1)
-          echo "All build artifacts present!"
+          for alvo in dist/index.js dist/server.js dist/frontend; do
+            if [ ! -e "$alvo" ]; then
+              echo "::error::build nao gerou $alvo"
+              exit 1
+            fi
+          done
+          echo "artefatos presentes"
 
-      - name: Upload build artifacts
-        if: matrix.node-version == '20.x'
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: matrix.node == '22'
         with:
-          name: build-artifacts
-          path: |
-            dist/
+          name: dist
+          path: dist/
           retention-days: 7
 
-  lint-check:
-    name: Lint Check
+  estilo:
+    name: Gate de estilo
+    # So em PR: o "antes" da comparacao e a branch base. Em push nao ha base.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      pull-requests: write # comenta a comparacao no PR
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
         with:
-          node-version: '20.x'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Check for TypeScript errors
-        run: npm run type-check
+          egress-policy: audit
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # o worktree da base precisa do historico
+      # PR vindo de fork recebe token somente-leitura, entao o comentario falha
+      # e vira aviso. O veredito continua valendo: a tabela vai para o resumo do
+      # job e o passo reprova igual.
+      - uses: ./.github/actions/gate-estilo
+        with:
+          token: ${{ github.token }}
+          cli-dirs: 'scripts bin cli measure'

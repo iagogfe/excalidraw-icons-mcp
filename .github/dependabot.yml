@@ -1,0 +1,46 @@
+# Dependabot, e nao Renovate como nos repositorios privados: o renovate.json
+# daqueles estende `shared Dependabot preset`, um preset privado, que um
+# repositorio publico nao consegue ler. O Dependabot e nativo, nao exige app
+# instalado, e sabe atualizar SHA pinado de action junto com o comentario da
+# versao ao lado — que e exatamente como as actions estao fixadas aqui.
+#
+# O `cooldown` repete em cada ecossistema de proposito: e por entrada, nao
+# global. Ele segura uma versao recem-publicada antes de propo-la, porque
+# pacote malicioso costuma ser despublicado em horas — sem a carencia, o bot
+# abriria o PR com a versao comprometida antes de alguem notar.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      # Um PR por grupo em vez de um por pacote: em repositorio pessoal a
+      # revisao e o gargalo, nao a quantidade de atualizacao disponivel.
+      producao:
+        dependency-type: production
+      desenvolvimento:
+        dependency-type: development
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
