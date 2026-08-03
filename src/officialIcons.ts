@@ -98,11 +98,58 @@ function score(query: string, name: string): number {
   return 0;
 }
 
+// How agents phrase things ↔ how vendor packs name their files. Expanding the
+// query (not the index) keeps the dictionary small and applies to every source.
+const QUERY_ALIASES: Record<string, string> = {
+  // AWS acronyms → official file wording
+  s3: 'simple storage service',
+  sqs: 'simple queue service',
+  sns: 'simple notification service',
+  eks: 'elastic kubernetes service',
+  ecs: 'elastic container service',
+  ecr: 'elastic container registry',
+  ebs: 'elastic block store',
+  efs: 'elastic file system',
+  alb: 'application load balancer',
+  elb: 'elastic load balancing',
+  // Other clouds
+  gke: 'google kubernetes engine',
+  aks: 'kubernetes services',
+  vm: 'virtual machine',
+  k8s: 'kubernetes',
+  // Kubernetes resources → kubectl short names used by the bundled pack files
+  deployment: 'deploy',
+  configmap: 'cm',
+  statefulset: 'sts',
+  daemonset: 'ds',
+  ingress: 'ing',
+  namespace: 'ns',
+  serviceaccount: 'sa',
+  persistentvolume: 'pv',
+  persistentvolumeclaim: 'pvc',
+  replicaset: 'rs',
+};
+
+// The original query plus a variant with each word replaced by its alias.
+function queryVariants(query: string): string[] {
+  const q = query.toLowerCase().replace(/[-_]/g, ' ').trim();
+  const variants = new Set([q]);
+  const aliased = q
+    .split(/\s+/)
+    .map(w => QUERY_ALIASES[w] ?? w)
+    .join(' ');
+  variants.add(aliased);
+  return [...variants];
+}
+
 function localResults(query: string): Array<OfficialIconResult & { _score: number }> {
   const results: Array<OfficialIconResult & { _score: number }> = [];
+  const variants = queryVariants(query);
+  const scoreAll = (name: string): number =>
+    Math.max(...variants.map(v => score(v, name)));
 
   for (const item of localIndex()) {
-    const s = score(query, item.name) || score(query, item.domain + ' ' + item.name);
+    const s = scoreAll(item.name) || scoreAll(item.domain + ' ' + item.name);
     if (s > 0) results.push({ ...item, _score: s });
   }
 
@@ -110,7 +157,7 @@ function localResults(query: string): Array<OfficialIconResult & { _score: numbe
     if (!key.startsWith('si')) continue;
     const title = (icon as any).title as string;
     const slug = (icon as any).slug as string;
-    const s = Math.max(score(query, title), score(query, slug));
+    const s = Math.max(scoreAll(title), scoreAll(slug));
     if (s > 0) {
       results.push({
         ref: `simple-icons:${slug}`,
@@ -124,7 +171,7 @@ function localResults(query: string): Array<OfficialIconResult & { _score: numbe
 
   for (const file of tablerIndex()) {
     const name = titleCaseFromFilename(file);
-    const s = score(query, name);
+    const s = scoreAll(name);
     if (s > 0) {
       results.push({
         ref: `tabler:${file}`,
