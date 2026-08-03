@@ -11,15 +11,12 @@ version: '3.8'
 
 services:
   # Canvas server (optional) - Visual UI and REST API
+  # O Semgrep pede `read_only: true` aqui. Fica de fora porque o servidor
+  # escreve o cache de bibliotecas em ~/.cache (getCacheDir, em
+  # src/libraries.ts): ligar sem montar tmpfs no home do usuario `nodejs`
+  # quebraria o servico em runtime, e nenhum teste de container pegaria.
+  # nosemgrep: yaml.docker-compose.security.writable-filesystem-service.writable-filesystem-service
   canvas:
-    # `no-new-privileges` impede escalonamento por binario setuid; nao muda
-    # nada em como o servico roda.
-    #
-    # O Semgrep tambem pede `read_only: true`, que nao esta aqui: o servidor
-    # escreve o cache de bibliotecas em ~/.cache (ver getCacheDir em
-    # src/libraries.ts). Ligar sem montar um tmpfs no home do usuario `nodejs`
-    # quebraria o servico em runtime, e nao ha teste de container que pegasse.
-    # nosemgrep: yaml.docker-compose.security.writable-filesystem-service.writable-filesystem-service
     security_opt:
       - no-new-privileges:true
     build:
@@ -46,15 +43,12 @@ services:
 
   # MCP server - Core product (typically run via Claude Desktop, not docker-compose)
   # This is here for testing or special deployment scenarios
+  # O Semgrep pede `read_only: true` aqui. Fica de fora porque o servidor
+  # escreve o cache de bibliotecas em ~/.cache (getCacheDir, em
+  # src/libraries.ts): ligar sem montar tmpfs no home do usuario `nodejs`
+  # quebraria o servico em runtime, e nenhum teste de container pegaria.
+  # nosemgrep: yaml.docker-compose.security.writable-filesystem-service.writable-filesystem-service
   mcp:
-    # `no-new-privileges` impede escalonamento por binario setuid; nao muda
-    # nada em como o servico roda.
-    #
-    # O Semgrep tambem pede `read_only: true`, que nao esta aqui: o servidor
-    # escreve o cache de bibliotecas em ~/.cache (ver getCacheDir em
-    # src/libraries.ts). Ligar sem montar um tmpfs no home do usuario `nodejs`
-    # quebraria o servico em runtime, e nao ha teste de container que pegasse.
-    # nosemgrep: yaml.docker-compose.security.writable-filesystem-service.writable-filesystem-service
     security_opt:
       - no-new-privileges:true
     build:
