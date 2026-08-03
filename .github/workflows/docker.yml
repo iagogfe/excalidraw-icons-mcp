@@ -73,7 +73,10 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=sha,prefix=sha-
+            # format=long porque o teste de fumaca resolve a imagem por
+            # sha-${{ github.sha }} (40 chars); o default do metadata-action
+            # e o SHA curto, e o mismatch dava "manifest unknown" no pull.
+            type=sha,prefix=sha-,format=long
             type=raw,value=latest,enable={{is_default_branch}}
 
       # ---------- PR: construir local e varrer, sem publicar ----------
