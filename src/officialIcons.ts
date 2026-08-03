@@ -87,15 +87,42 @@ function tablerIndex(): string[] {
   return tablerIndexCache;
 }
 
+// Lowercase, split, and singularize each word (naive trailing-s strip) so
+// "app service" matches "App Services" and "azure functions" matches
+// "Function Apps". Applied to both sides, so over-stripping stays consistent.
+function normWords(s: string): string[] {
+  return s
+    .toLowerCase()
+    .replace(/[-_]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(w => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w));
+}
+
+// Vendor-pack filename furniture, not meaning: "Arch_Amazon-EC2_48" ranks the
+// same as "Amazon EC2".
+const NOISE_WORDS = new Set(['arch', 'res', '16', '32', '48', '64']);
+
 function score(query: string, name: string): number {
-  const q = query.toLowerCase().replace(/[-_]/g, ' ').trim();
-  const n = name.toLowerCase().replace(/[-_]/g, ' ').trim();
-  if (n === q) return 100;
-  if (n.startsWith(q)) return 80;
-  if (n.includes(q)) return 60;
-  const qWords = q.split(/\s+/);
-  if (qWords.every(w => n.includes(w))) return 40;
-  return 0;
+  const qWords = normWords(query);
+  const nWords = normWords(name).filter(w => !NOISE_WORDS.has(w));
+  const q = qWords.join(' ');
+  const n = nWords.join(' ');
+  if (!q || !n) return 0;
+
+  let rung = 0;
+  if (n === q) rung = 100;
+  else if (n.startsWith(q)) rung = 80;
+  else if (n.includes(q)) rung = 60;
+  else if (qWords.every(w => n.includes(w))) rung = 40;
+  if (rung === 0) return 0;
+
+  // Precision bonus (0..10): among equally-matching names, the one with fewer
+  // leftover words wins — "Amazon Simple Storage Service" beats
+  // "Amazon Simple Storage Service Glacier" for "s3".
+  const matched = nWords.filter(w => qWords.some(qw => w.includes(qw) || qw.includes(w))).length;
+  return rung + 10 * (matched / Math.max(nWords.length, 1));
 }
 
 // How agents phrase things ↔ how vendor packs name their files. Expanding the
