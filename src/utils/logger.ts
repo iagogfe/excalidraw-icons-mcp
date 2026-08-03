@@ -51,12 +51,25 @@ const LEVELS = { error: 0, warn: 1, info: 2, debug: 3 } as const;
 type Level = keyof typeof LEVELS;
 const MAX_LEVEL = LEVELS[(process.env.LOG_LEVEL as Level) in LEVELS ? (process.env.LOG_LEVEL as Level) : 'info'];
 
+// Append via a long-lived stream: appendFileSync did a synchronous
+// open+write+close on every line, which dominated tool-call latency.
+let logStream: fs.WriteStream | null = null;
+function fileSink(line: string): void {
+  if (!logStream) {
+    try {
+      logStream = fs.createWriteStream(RESOLVED_LOG_FILE_PATH, { flags: 'a' });
+      logStream.on('error', () => { logStream = null; });
+    } catch { return; /* file sink is best-effort */ }
+  }
+  logStream.write(line);
+}
+
 function log(level: Level, message: string, meta?: unknown): void {
   if (LEVELS[level] > MAX_LEVEL) return;
   const ts = new Date().toISOString().replace('T', ' ').replace('Z', '');
   const extra = meta && typeof meta === 'object' && Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
   const line = `${ts} [${level}] ${message}${extra}\n`;
-  try { fs.appendFileSync(RESOLVED_LOG_FILE_PATH, line); } catch { /* file sink is best-effort */ }
+  fileSink(line);
   if (level === 'warn' || level === 'error') process.stderr.write(line);
 }
 
