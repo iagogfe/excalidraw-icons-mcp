@@ -1,0 +1,83 @@
+name: Gate de estilo
+description: >-
+  Mede o codigo da branch base e o do PR com as mesmas regras, comenta a
+  comparacao e reprova se alguma metrica piorou.
+
+inputs:
+  token:
+    description: Token com permissao de escrita em pull requests
+    required: true
+  limite-arquivo:
+    description: Linhas acima das quais um arquivo conta como grande
+    required: false
+    default: '500'
+  limite-funcao:
+    description: Linhas de codigo (NLOC) acima das quais uma funcao conta como longa
+    required: false
+    default: '60'
+  limite-ccn:
+    description: Complexidade ciclomatica acima da qual uma funcao e contada
+    required: false
+    default: '10'
+  cli-dirs:
+    description: Diretorios onde console.log e a interface, nao debug solto
+    required: false
+    default: 'scripts bin cli prisma'
+
+runs:
+  using: composite
+  steps:
+    - name: Instalar as ferramentas de medicao
+      shell: bash
+      # lizard mede NLOC e complexidade por funcao em qualquer linguagem, sem
+      # ler config do projeto — requisito para medir a base, que ainda nao tem
+      # estas regras configuradas.
+      #
+      # jscpd e instalado global, e nao chamado por `npx`, porque o npx resolve
+      # dependencias contra o package.json do repositorio medido e aborta em
+      # repo com conflito de `overrides`.
+      run: |
+        pipx install lizard || pip install --break-system-packages lizard
+        npm install -g jscpd@4
+
+    - name: Medir a base e o PR
+      shell: bash
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        LIMITE_ARQUIVO: ${{ inputs.limite-arquivo }}
+        LIMITE_FUNCAO: ${{ inputs.limite-funcao }}
+        LIMITE_CCN: ${{ inputs.limite-ccn }}
+        CLI_DIRS: ${{ inputs.cli-dirs }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+
+        if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+          echo "::error::commit base $BASE_SHA ausente — o checkout precisa de fetch-depth: 0"
+          exit 1
+        fi
+
+        # O .gate-estilo-ignore do PR vale para os dois lados. Se cada lado
+        # usasse o seu, um PR que adiciona exclusoes mediria a base sem elas e
+        # passaria de graca.
+        export IGNORE_FILE="$GITHUB_WORKSPACE/.gate-estilo-ignore"
+
+        git worktree add --detach /tmp/gate-base "$BASE_SHA" > /dev/null
+        (cd /tmp/gate-base && bash "$ACTION_PATH/contar.sh") > /tmp/gate-antes.tsv
+        bash "$ACTION_PATH/contar.sh" > /tmp/gate-depois.tsv
+
+        echo "--- base:";  cat /tmp/gate-antes.tsv
+        echo "--- PR:";    cat /tmp/gate-depois.tsv
+
+    - name: Comparar e comentar no PR
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        LIMITE_ARQUIVO: ${{ inputs.limite-arquivo }}
+        LIMITE_FUNCAO: ${{ inputs.limite-funcao }}
+        LIMITE_CCN: ${{ inputs.limite-ccn }}
+      run: python3 "${{ github.action_path }}/comparar.py" /tmp/gate-antes.tsv /tmp/gate-depois.tsv
