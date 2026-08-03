@@ -501,16 +501,23 @@ function App(): JSX.Element {
 
       switch (data.type) {
         case 'initial_elements':
-          // Skip the (expensive) convert+apply if loadExistingElements already
-          // populated the scene — the two paths race on open and doing both
-          // means converting the whole scene twice.
-          if (data.elements && data.elements.length > 0 && currentElements.length === 0) {
-            const cleanedElements = data.elements.map(cleanElementForExcalidraw)
-            const convertedElements = convertElementsPreservingImageProps(cleanedElements)
-            applySceneUpdateWithoutAutoSync(excalidrawAPI, {
-              elements: convertedElements,
-              captureUpdate: CaptureUpdateAction.NEVER
-            })
+          if (data.elements && data.elements.length > 0) {
+            if (currentElements.length === 0) {
+              // First load: loadExistingElements may already have populated the
+              // scene — the two paths race on open, so only apply when empty.
+              const cleanedElements = data.elements.map(cleanElementForExcalidraw)
+              const convertedElements = convertElementsPreservingImageProps(cleanedElements)
+              applySceneUpdateWithoutAutoSync(excalidrawAPI, {
+                elements: convertedElements,
+                captureUpdate: CaptureUpdateAction.NEVER
+              })
+            } else {
+              // Re-broadcast (e.g. pre-export convergence): merge the canonical
+              // server state in — otherwise a long-lived tab stays stale and its
+              // next /api/elements/sync clobbers elements it never received.
+              const cleanedElements = data.elements.map(cleanElementForExcalidraw)
+              mergeAndApplySceneElements(cleanedElements)
+            }
           }
           // Load files for image elements
           if ((data as any).files) {
