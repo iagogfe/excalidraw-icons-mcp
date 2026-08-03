@@ -76,7 +76,10 @@ const K8S_NAME_EXPANSIONS: Record<string, string> = {
   'sched': 'Scheduler',
 };
 
-function walkSvgs(dir: string, domain: string, out: OfficialIconResult[]): void {
+// Index entries carry their normalized forms, computed once at index build.
+type IndexedIcon = OfficialIconResult & { nameNorm: Norm; domainNameNorm: Norm };
+
+function walkSvgs(dir: string, domain: string, out: IndexedIcon[]): void {
   if (!fs.existsSync(dir)) return;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
@@ -86,21 +89,24 @@ function walkSvgs(dir: string, domain: string, out: OfficialIconResult[]): void 
       const rel = path.relative(ICONS_ROOT, full);
       const base = path.basename(entry.name, '.svg');
       const expanded = domain === 'kubernetes' ? K8S_NAME_EXPANSIONS[base] : undefined;
+      const name = expanded ?? titleCaseFromFilename(entry.name);
       out.push({
         ref: `local:${rel}`,
-        name: expanded ?? titleCaseFromFilename(entry.name),
+        name,
         domain,
         source: `bundled icons/${domain}`,
+        nameNorm: normName(name),
+        domainNameNorm: normName(domain + ' ' + name),
       });
     }
   }
 }
 
-let localIndexCache: OfficialIconResult[] | null = null;
+let localIndexCache: IndexedIcon[] | null = null;
 
-function localIndex(): OfficialIconResult[] {
+function localIndex(): IndexedIcon[] {
   if (localIndexCache) return localIndexCache;
-  const out: OfficialIconResult[] = [];
+  const out: IndexedIcon[] = [];
   if (fs.existsSync(ICONS_ROOT)) {
     for (const domain of fs.readdirSync(ICONS_ROOT)) {
       const domainDir = path.join(ICONS_ROOT, domain);
@@ -113,12 +119,23 @@ function localIndex(): OfficialIconResult[] {
   return out;
 }
 
-let tablerIndexCache: string[] | null = null;
+interface TablerEntry {
+  file: string;
+  name: string;
+  nameNorm: Norm;
+}
 
-function tablerIndex(): string[] {
+let tablerIndexCache: TablerEntry[] | null = null;
+
+function tablerIndex(): TablerEntry[] {
   if (tablerIndexCache) return tablerIndexCache;
   tablerIndexCache = fs.existsSync(TABLER_ROOT)
-    ? fs.readdirSync(TABLER_ROOT).filter(f => f.endsWith('.svg'))
+    ? fs.readdirSync(TABLER_ROOT)
+        .filter(f => f.endsWith('.svg'))
+        .map(file => {
+          const name = titleCaseFromFilename(file);
+          return { file, name, nameNorm: normName(name) };
+        })
     : [];
   return tablerIndexCache;
 }
@@ -140,25 +157,39 @@ function normWords(s: string): string[] {
 // same as "Amazon EC2".
 const NOISE_WORDS = new Set(['arch', 'res', '16', '32', '48', '64']);
 
-function score(query: string, name: string): number {
-  const qWords = normWords(query);
-  const nWords = normWords(name).filter(w => !NOISE_WORDS.has(w));
-  const q = qWords.join(' ');
-  const n = nWords.join(' ');
-  if (!q || !n) return 0;
+// Normalization is the hot path of a search (it runs against every indexed
+// name), so it is computed once per index entry and once per query — never
+// per (query, name) pair.
+interface Norm {
+  words: string[];
+  joined: string;
+}
+
+function normName(s: string): Norm {
+  const words = normWords(s).filter(w => !NOISE_WORDS.has(w));
+  return { words, joined: words.join(' ') };
+}
+
+function normQuery(s: string): Norm {
+  const words = normWords(s);
+  return { words, joined: words.join(' ') };
+}
+
+function scoreNorm(q: Norm, n: Norm): number {
+  if (!q.joined || !n.joined) return 0;
 
   let rung = 0;
-  if (n === q) rung = 100;
-  else if (n.startsWith(q)) rung = 80;
-  else if (n.includes(q)) rung = 60;
-  else if (qWords.every(w => n.includes(w))) rung = 40;
+  if (n.joined === q.joined) rung = 100;
+  else if (n.joined.startsWith(q.joined)) rung = 80;
+  else if (n.joined.includes(q.joined)) rung = 60;
+  else if (q.words.every(w => n.joined.includes(w))) rung = 40;
   if (rung === 0) return 0;
 
   // Precision bonus (0..10): among equally-matching names, the one with fewer
   // leftover words wins — "Amazon Simple Storage Service" beats
   // "Amazon Simple Storage Service Glacier" for "s3".
-  const matched = nWords.filter(w => qWords.some(qw => w.includes(qw) || qw.includes(w))).length;
-  return rung + 10 * (matched / Math.max(nWords.length, 1));
+  const matched = n.words.filter(w => q.words.some(qw => w.includes(qw) || qw.includes(w))).length;
+  return rung + 10 * (matched / Math.max(n.words.length, 1));
 }
 
 // How agents phrase things ↔ how vendor packs name their files. Expanding the
@@ -200,8 +231,9 @@ const PHRASE_ALIASES: Record<string, string[]> = {
   'azure blob storage': ['azure storage accounts', 'azure blob'],
 };
 
-// The original query plus a variant with each word replaced by its alias.
-function queryVariants(query: string): string[] {
+// The original query plus a variant with each word replaced by its alias,
+// each pre-normalized once.
+function queryVariants(query: string): Norm[] {
   const q = query.toLowerCase().replace(/[-_]/g, ' ').trim();
   const variants = new Set([q]);
   const aliased = q
@@ -210,29 +242,51 @@ function queryVariants(query: string): string[] {
     .join(' ');
   variants.add(aliased);
   for (const extra of PHRASE_ALIASES[q] ?? []) variants.add(extra);
-  return [...variants];
+  return [...variants].map(normQuery);
+}
+
+interface SimpleIconEntry {
+  slug: string;
+  title: string;
+  titleNorm: Norm;
+  slugNorm: Norm;
+}
+
+let simpleIconsIndexCache: SimpleIconEntry[] | null = null;
+
+function simpleIconsIndex(): SimpleIconEntry[] {
+  if (simpleIconsIndexCache) return simpleIconsIndexCache;
+  const out: SimpleIconEntry[] = [];
+  for (const [key, icon] of Object.entries(simpleIcons)) {
+    if (!key.startsWith('si')) continue;
+    const title = (icon as any).title as string;
+    const slug = (icon as any).slug as string;
+    out.push({ slug, title, titleNorm: normName(title), slugNorm: normName(slug) });
+  }
+  simpleIconsIndexCache = out;
+  return out;
 }
 
 function localResults(query: string): Array<OfficialIconResult & { _score: number }> {
   const results: Array<OfficialIconResult & { _score: number }> = [];
   const variants = queryVariants(query);
-  const scoreAll = (name: string): number =>
-    Math.max(...variants.map(v => score(v, name)));
+  const scoreAll = (n: Norm): number =>
+    Math.max(...variants.map(v => scoreNorm(v, n)));
 
   for (const item of localIndex()) {
-    const s = scoreAll(item.name) || scoreAll(item.domain + ' ' + item.name);
-    if (s > 0) results.push({ ...item, _score: s });
+    const s = scoreAll(item.nameNorm) || scoreAll(item.domainNameNorm);
+    if (s > 0) {
+      const { nameNorm, domainNameNorm, ...pub } = item;
+      results.push({ ...pub, _score: s });
+    }
   }
 
-  for (const [key, icon] of Object.entries(simpleIcons)) {
-    if (!key.startsWith('si')) continue;
-    const title = (icon as any).title as string;
-    const slug = (icon as any).slug as string;
-    const s = Math.max(scoreAll(title), scoreAll(slug));
+  for (const entry of simpleIconsIndex()) {
+    const s = Math.max(scoreAll(entry.titleNorm), scoreAll(entry.slugNorm));
     if (s > 0) {
       results.push({
-        ref: `simple-icons:${slug}`,
-        name: title,
+        ref: `simple-icons:${entry.slug}`,
+        name: entry.title,
         domain: 'logo',
         source: 'simple-icons (CC0)',
         _score: s - 5, // local/bundled architecture icons rank slightly above generic logos
@@ -240,13 +294,12 @@ function localResults(query: string): Array<OfficialIconResult & { _score: numbe
     }
   }
 
-  for (const file of tablerIndex()) {
-    const name = titleCaseFromFilename(file);
-    const s = scoreAll(name);
+  for (const entry of tablerIndex()) {
+    const s = scoreAll(entry.nameNorm);
     if (s > 0) {
       results.push({
-        ref: `tabler:${file}`,
-        name,
+        ref: `tabler:${entry.file}`,
+        name: entry.name,
         domain: 'generic',
         source: '@tabler/icons (MIT)',
         _score: s - 2, // rank between bundled-official (0) and simple-icons (-5)
