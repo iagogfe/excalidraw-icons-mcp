@@ -35,6 +35,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+// Local tool API: ETag hashes every JSON body for conditional GETs no client sends.
+app.disable('etag');
+app.disable('x-powered-by');
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
