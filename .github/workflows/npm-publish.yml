@@ -1,4 +1,12 @@
-name: Publish to NPM
+# Publicacao no npm, disparada por release ou manualmente.
+#
+# O nome do pacote e a versao sao lidos do package.json, nunca escritos a mao
+# aqui. Antes o guard consultava `mcp-excalidraw-server`, que e outro pacote
+# (publicado em 1.1.0 por outra pessoa) e nao este — o resultado era um guard
+# que nao guardava nada, e que passaria a pular a publicacao em silencio no dia
+# em que aquele pacote chegasse a mesma versao deste.
+
+name: Publicar no npm
 
 on:
   release:
@@ -6,98 +14,102 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to publish (e.g., latest, beta, next)'
+        description: 'dist-tag do npm (latest, beta, next)'
         required: true
         default: 'latest'
 
+permissions:
+  contents: read
+
 jobs:
-  publish:
-    name: Publish to NPM Registry
+  publicar:
+    name: Publicar no registro do npm
     runs-on: ubuntu-latest
     permissions:
-      contents: write # gh release upload
-      id-token: write # npm --provenance
-
+      contents: write # anexa o tarball na release
+      id-token: write # procedencia do npm (npm publish --provenance)
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
         with:
-          node-version: '20.x'
+          egress-policy: audit
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
+          cache: npm
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run type check
+      - run: npm ci
+      - name: Type check
         run: npm run type-check
-
-      - name: Build project
+      - name: Build
         run: npm run build
 
-      - name: Verify build artifacts
+      - name: Conferir os artefatos de build
         run: |
-          echo "Verifying build artifacts..."
-          test -f dist/index.js || (echo "ERROR: dist/index.js not found" && exit 1)
-          test -f dist/server.js || (echo "ERROR: dist/server.js not found" && exit 1)
-          test -d dist/frontend || (echo "ERROR: dist/frontend not found" && exit 1)
-          echo "All required artifacts present!"
+          for alvo in dist/index.js dist/server.js dist/frontend; do
+            if [ ! -e "$alvo" ]; then
+              echo "::error::build nao gerou $alvo"
+              exit 1
+            fi
+          done
 
-      - name: Get package version
-        id: package-version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-
-      - name: Check if version exists on NPM
-        id: check-version
+      - name: Ler nome e versao do package.json
+        id: pkg
         run: |
-          if npm view mcp-excalidraw-server@${{ steps.package-version.outputs.version }} version 2>/dev/null; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Version ${{ steps.package-version.outputs.version }} already exists on NPM"
+          set -euo pipefail
+          {
+            echo "nome=$(node -p "require('./package.json').name")"
+            echo "versao=$(node -p "require('./package.json').version")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verificar se a versao ja existe no npm
+        id: existe
+        env:
+          NOME: ${{ steps.pkg.outputs.nome }}
+          VERSAO: ${{ steps.pkg.outputs.versao }}
+        run: |
+          # `npm view` sai 1 tanto quando o pacote nao existe quanto quando a
+          # versao nao existe. Os dois casos significam "pode publicar".
+          if npm view "$NOME@$VERSAO" version > /dev/null 2>&1; then
+            echo "valor=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::$NOME@$VERSAO ja esta publicado; a publicacao sera pulada"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Version ${{ steps.package-version.outputs.version }} does not exist on NPM"
+            echo "valor=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Publish to NPM (Release)
-        if: github.event_name == 'release' && steps.check-version.outputs.exists == 'false'
-        run: npm publish --provenance --access public
+      - name: Publicar
+        if: steps.existe.outputs.valor == 'false'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish to NPM (Manual)
-        if: github.event_name == 'workflow_dispatch' && steps.check-version.outputs.exists == 'false'
+          DIST_TAG: ${{ github.event.inputs.tag || 'latest' }}
         run: npm publish --tag "$DIST_TAG" --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          DIST_TAG: ${{ github.event.inputs.tag }}
 
-      - name: Skip publishing (version exists)
-        if: steps.check-version.outputs.exists == 'true'
-        run: |
-          echo "⚠️  Skipping publish - version ${{ steps.package-version.outputs.version }} already exists on NPM"
-          echo "Please bump the version in package.json before publishing"
-
-      - name: Upload Release Assets
+      - name: Anexar o tarball na release
         if: github.event_name == 'release'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.package-version.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          NOME: ${{ steps.pkg.outputs.nome }}
+          VERSAO: ${{ steps.pkg.outputs.versao }}
           TAG: ${{ github.event.release.tag_name }}
+          REPO: ${{ github.repository }}
         run: |
-          tar -czf "excalidraw-icons-mcp-${VERSION}.tar.gz" dist/
-          gh release upload "$TAG" "excalidraw-icons-mcp-${VERSION}.tar.gz" --repo "$GITHUB_REPOSITORY"
+          set -euo pipefail
+          arquivo="${NOME}-${VERSAO}.tar.gz"
+          tar -czf "$arquivo" dist/
+          gh release upload "$TAG" "$arquivo" --repo "$REPO"
 
-  notify:
-    name: Publish Notification
-    needs: publish
-    runs-on: ubuntu-latest
-    if: success()
-
-    steps:
-      - name: Success notification
+      - name: Resumo
+        if: always()
+        env:
+          NOME: ${{ steps.pkg.outputs.nome }}
+          VERSAO: ${{ steps.pkg.outputs.versao }}
+          PULOU: ${{ steps.existe.outputs.valor }}
         run: |
-          echo "✅ Package successfully published to NPM!"
-          echo "View at: https://www.npmjs.com/package/mcp-excalidraw-server"
+          if [ "$PULOU" = "true" ]; then
+            echo "Publicacao pulada: $NOME@$VERSAO ja existe." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Publicado: https://www.npmjs.com/package/$NOME/v/$VERSAO" >> "$GITHUB_STEP_SUMMARY"
+          fi

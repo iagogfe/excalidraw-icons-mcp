@@ -1,0 +1,32 @@
+# Dependabot, e nao Renovate como nos repositorios privados: o renovate.json
+# daqueles estende `github>iagogfe/workflows`, um preset privado, que um
+# repositorio publico nao consegue ler. O Dependabot e nativo, nao exige app
+# instalado, e sabe atualizar SHA pinado de action junto com o comentario da
+# versao ao lado — que e exatamente como as actions estao fixadas aqui.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # Um PR por grupo em vez de um por pacote: em repositorio pessoal a
+      # revisao e o gargalo, nao a quantidade de atualizacao disponivel.
+      producao:
+        dependency-type: production
+      desenvolvimento:
+        dependency-type: development
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
