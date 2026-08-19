@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { WebSocketServer } from 'ws';
-import { createServer } from 'http';
+import { createServer, IncomingMessage } from 'http';
 import net from 'net';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -47,7 +47,7 @@ const server = createServer(app);
 
 const wss = new WebSocketServer({
   server,
-  verifyClient: (info: { origin: string | undefined; secure: boolean; req: any }) => {
+  verifyClient: (info: { origin: string | undefined; secure: boolean; req: IncomingMessage }) => {
     // If there is no Origin header (e.g. programmatic MCP client), allow connection
     if (!info.origin) return true;
 
