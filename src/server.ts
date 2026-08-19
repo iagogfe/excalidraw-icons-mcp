@@ -464,8 +464,17 @@ app.get('/api/elements/search', (req: Request, res: Response) => {
 
     // Apply additional exact-match filters
     if (Object.keys(filters).length > 0) {
+      const allowedKeys = [
+        'id', 'type', 'x', 'y', 'width', 'height', 'angle', 'strokeColor', 'backgroundColor', 'fillStyle', 'strokeWidth', 'strokeStyle',
+        'roughness', 'opacity', 'groupIds', 'frameId', 'roundness', 'seed', 'versionNonce', 'isDeleted', 'locked', 'link', 'customData', 'boundElements',
+        'updated', 'containerId', 'createdAt', 'updatedAt', 'version', 'syncedAt', 'source', 'syncTimestamp', 'text', 'originalText', 'fontSize',
+        'fontFamily', 'label', 'points', 'start', 'end'
+      ];
       results = results.filter(element => {
         return Object.entries(filters).every(([key, value]) => {
+          if (!allowedKeys.includes(key) || !Object.hasOwn(element, key)) {
+            return true; // Ignore unknown or potentially harmful keys without failing the match
+          }
           return (element as any)[key] === value;
         });
       });
