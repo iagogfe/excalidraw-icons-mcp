@@ -28,12 +28,46 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  gates:
+    name: Gates de CI e segurança
+    # Em PR os gates rodam como workflows próprios e o build não publica nada.
+    # Em push/tag, esperar aqui transforma CI e segurança em pré-requisitos reais
+    # da publicação — workflows separados não criam dependência entre si.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+    steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Aguardar CI e segurança do mesmo commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/await-gates.sh
+
   imagem:
     name: ${{ matrix.nome }}
+    needs: [gates, misconfig]
+    # `gates` é pulado em PR, mas `always()` permite que o build de validação
+    # continue; em push/tag, somente os dois gates verdes chegam à publicação.
+    if: >-
+      ${{ always() &&
+          (github.event_name == 'pull_request' ||
+           (needs.gates.result == 'success' && needs.misconfig.result == 'success')) }}
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     permissions:
       contents: read
       packages: write # so usado no push; PR de fork nem chega aqui
+      attestations: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -122,10 +156,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
+          sbom: true
+          provenance: mode=max
 
   misconfig:
     name: Misconfig (Trivy)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
         with:
@@ -145,10 +182,14 @@ jobs:
     needs: imagem
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       packages: read
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
