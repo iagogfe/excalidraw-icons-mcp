@@ -26,6 +26,7 @@ jobs:
   segredos:
     name: Segredos (Gitleaks)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
         with:
@@ -48,6 +49,7 @@ jobs:
   dependencias:
     name: Dependencias (osv-scanner)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
         with:
@@ -60,6 +62,7 @@ jobs:
   semgrep:
     name: SAST (Semgrep)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     container:
       image: semgrep/semgrep:1.172.0@sha256:65dcd4408adda7c183a6b4550cb1e9b19f7f627a6fbb7e0559bd466bedc44d7b
     steps:
@@ -74,11 +77,15 @@ jobs:
     # publico. Complementa o Semgrep em vez de substituir: o CodeQL segue fluxo
     # de dados entre arquivos, onde o Semgrep casa padrao local.
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: read
       security-events: write # publica os alertas na aba Security
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false

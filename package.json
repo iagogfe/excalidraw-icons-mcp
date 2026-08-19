@@ -20,10 +20,12 @@
     "test:bind": "npm run build:server && node scripts/check-local-bind.mjs",
     "test:libraries": "npm run build:server && node scripts/test-libraries.mjs",
     "test:conventions": "npm run build:server && node scripts/test-conventions.mjs",
+    "test:ci": "npm run build:server && node scripts/test-conventions.mjs && node scripts/test-cache-path.mjs && node scripts/test-libraries.mjs && node scripts/check-local-bind.mjs",
     "type-check": "npx tsc --noEmit",
     "test:arrow-drag": "npm run build && node scripts/test-arrow-drag.mjs",
     "test:cache-path": "npm run build:server && node scripts/test-cache-path.mjs",
-    "test:mermaid": "npm run build && node scripts/test-mermaid-convert.mjs"
+    "test:mermaid": "npm run build && node scripts/test-mermaid-convert.mjs",
+    "test:e2e:ci": "npm run build && node scripts/test-mermaid-convert.mjs && node scripts/test-arrow-drag.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.0",

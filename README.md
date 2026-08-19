@@ -109,7 +109,7 @@ Excalidraw now has an [official MCP](https://github.com/excalidraw/excalidraw-mc
 
 ## Quick Start (Local)
 
-Prereqs: Node >= 18, npm
+Prereqs: Node >= 20, npm
 
 ```bash
 npm ci
@@ -486,6 +486,27 @@ Conventions live in `src/diagramConventions.ts`; validated by `npm run test:conv
 Drop the `.svg` files directly under the folder (subfolders are fine — the index walks recursively). Local packs take priority over Iconify in search results. After adding a pack, restart the MCP server so the icon index picks it up.
 
 ## Testing
+
+The CI runs the same checks with `npm run test:ci` (bind, cache traversal,
+library behavior and diagram conventions) and `npm run test:e2e:ci` (Mermaid
+conversion and arrow dragging in Chromium). Docker publication waits for the CI
+and security workflows of the same commit, plus the Trivy misconfiguration
+scan; a tag that was not validated by those workflows cannot publish.
+
+### Publishing the npm package
+
+The release workflow expects a repository secret named `NPM_TOKEN` with publish
+permission for `excalidraw-icons-mcp`. It validates that the release tag matches
+the version in `package.json`, checks the token with `npm whoami`, and publishes
+only after CI and security are green. Configure npm trusted publishing instead
+if you prefer OIDC over a long-lived token.
+
+### GitHub repository protection
+
+The workflows cannot prevent a direct push by themselves. Protect `main` in
+GitHub, require pull requests and require the CI, security and Docker checks
+before merge. Also restrict who can push version tags; otherwise someone with
+write access can bypass the validation by pushing directly.
 
 ### Canvas Smoke Test (HTTP)
 
