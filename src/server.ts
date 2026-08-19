@@ -53,14 +53,22 @@ const wss = new WebSocketServer({
 
     try {
       const originUrl = new URL(info.origin);
-      const reqHost = info.req.headers.host; // This includes the port, e.g., "localhost:3000"
 
-      // To prevent CSWSH, ensure that the Origin matches the Host header.
-      if (reqHost && originUrl.host === reqHost) {
+      // 1. We allow any valid loopback hostname (127.0.0.1, ::1, localhost, [::1]).
+      // 2. We also allow the exactly configured HOST.
+      // 3. We enforce that the port matches PORT.
+      const isAllowedHost =
+        LOOPBACK_ADDRESSES.includes(originUrl.hostname) ||
+        originUrl.hostname === 'localhost' ||
+        originUrl.hostname === '[::1]' ||
+        originUrl.hostname === HOST;
+      const isAllowedPort = originUrl.port === String(PORT) || (originUrl.port === '' && (originUrl.protocol === 'http:' && PORT === 80 || originUrl.protocol === 'https:' && PORT === 443));
+
+      if (isAllowedHost && isAllowedPort) {
         return true;
       }
 
-      logger.warn(`Rejected WebSocket connection from unauthorized origin: ${info.origin} (Expected Host: ${reqHost})`);
+      logger.warn(`Rejected WebSocket connection from unauthorized origin: ${info.origin}`);
       return false;
     } catch (error) {
       logger.error(`Error parsing WebSocket origin URL: ${info.origin}`, error);
