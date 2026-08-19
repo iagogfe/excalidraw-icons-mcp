@@ -20,12 +20,16 @@ jobs:
   analise:
     name: Analise do Scorecard
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       security-events: write # publica o SARIF na aba Security
       id-token: write # assina o resultado para o badge publico
       contents: read
       actions: read
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false

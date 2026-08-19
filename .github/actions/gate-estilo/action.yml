@@ -37,8 +37,8 @@ runs:
       # dependencias contra o package.json do repositorio medido e aborta em
       # repo com conflito de `overrides`.
       run: |
-        pipx install lizard || pip install --break-system-packages lizard
-        npm install -g jscpd@4
+        pipx install lizard==1.24.0 || pip install --break-system-packages lizard==1.24.0
+        npm install -g jscpd@4.3.0
 
     - name: Medir a base e o PR
       shell: bash

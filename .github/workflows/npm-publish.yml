@@ -22,9 +22,31 @@ permissions:
   contents: read
 
 jobs:
+  gates:
+    name: Gates de CI e segurança
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+    steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Aguardar CI e segurança do mesmo commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/await-gates.sh
+
   publicar:
     name: Publicar no registro do npm
+    needs: gates
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write # anexa o tarball na release
       id-token: write # procedencia do npm (npm publish --provenance)
@@ -65,6 +87,27 @@ jobs:
             echo "versao=$(node -p "require('./package.json').version")"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Validar tag da release
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          VERSAO: ${{ steps.pkg.outputs.versao }}
+        run: |
+          if [ "$TAG" != "v$VERSAO" ]; then
+            echo "::error::tag $TAG não corresponde à versão $VERSAO do package.json"
+            exit 1
+          fi
+
+      - name: Validar credencial do npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::error::NPM_TOKEN não está configurado nos secrets do repositório"
+            exit 1
+          fi
+          npm whoami
+
       - name: Verificar se a versao ja existe no npm
         id: existe
         env:
@@ -81,6 +124,7 @@ jobs:
           fi
 
       - name: Publicar
+        id: publicar
         if: steps.existe.outputs.valor == 'false'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -107,9 +151,12 @@ jobs:
           NOME: ${{ steps.pkg.outputs.nome }}
           VERSAO: ${{ steps.pkg.outputs.versao }}
           PULOU: ${{ steps.existe.outputs.valor }}
+          PUBLICOU: ${{ steps.publicar.outcome }}
         run: |
           if [ "$PULOU" = "true" ]; then
             echo "Publicacao pulada: $NOME@$VERSAO ja existe." >> "$GITHUB_STEP_SUMMARY"
-          else
+          elif [ "$PUBLICOU" = "success" ]; then
             echo "Publicado: https://www.npmjs.com/package/$NOME/v/$VERSAO" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Publicação não concluída: $NOME@$VERSAO. Consulte o passo que falhou." >> "$GITHUB_STEP_SUMMARY"
           fi

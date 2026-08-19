@@ -24,7 +24,7 @@ workflow from a private one, so nothing here is shared with `iagogfe/workflows`
 — the style gate is a copy under `.github/actions/gate-estilo`, and a fix there
 has to be carried across by hand.
 
-- `ci.yml` — build matrix (Node 20/22/24) and the style gate
+- `ci.yml` — build matrix (Node 20/22/24), testes determinísticos, E2E Playwright e style gate
 - `security.yml` — Gitleaks, osv-scanner, Semgrep, CodeQL
 - `docker.yml` — Hadolint, build, Trivy, publish to ghcr.io
 - `scorecard.yml` — OpenSSF Scorecard (public repositories only)
@@ -46,11 +46,10 @@ this repo does not need one today.
 On a pull request from a fork the token is read-only, so the gate cannot post
 its comment. It still runs and still fails — the table goes to the job summary.
 
-Everything untagged is checked by nobody. It exists to shape the code as it is
-written, and no CI job will remind you of it — that covers most of the
-Comments, Tests, Dependencies and Structure sections below. Whatever this
-repo's own linter adds on top is stated in the header above, and it is not the
-same in every project.
+The CI runs `test:ci` on Node 22 and `test:e2e:ci` with Chromium. The individual
+`test:*` scripts remain useful for local feedback, while the style gate covers
+the repository-wide heuristics described below. Comments, dependency design
+and structure still depend on review rather than an automated rule.
 
 ## Code style
 
