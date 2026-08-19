@@ -27,6 +27,7 @@ import {
 } from './types.js';
 import { z } from 'zod';
 import WebSocket from 'ws';
+import cors from 'cors';
 
 // Load environment variables
 dotenv.config();
@@ -42,6 +43,7 @@ const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
 // Middleware
+app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // Serve static files from the build directory
