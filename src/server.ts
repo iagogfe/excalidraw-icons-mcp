@@ -57,16 +57,13 @@ const wss = new WebSocketServer({
       // 1. We allow any valid loopback hostname (127.0.0.1, ::1, localhost, [::1]).
       // 2. We also allow the exactly configured HOST.
       // 3. We enforce that the port matches PORT.
-      const isAllowedHost =
-        LOOPBACK_ADDRESSES.includes(originUrl.hostname) ||
-        originUrl.hostname === 'localhost' ||
-        originUrl.hostname === '[::1]' ||
-        originUrl.hostname === HOST;
-      const isAllowedPort = originUrl.port === String(PORT) || (originUrl.port === '' && (originUrl.protocol === 'http:' && PORT === 80 || originUrl.protocol === 'https:' && PORT === 443));
+      const hn = originUrl.hostname;
+      const prt = originUrl.port || (originUrl.protocol === 'https:' ? '443' : '80');
 
-      if (isAllowedHost && isAllowedPort) {
-        return true;
-      }
+      const isLoopback = hn === 'localhost' || hn === '[::1]' || LOOPBACK_ADDRESSES.includes(hn);
+      const isAllowedPort = prt === String(PORT);
+
+      if ((isLoopback || hn === HOST) && isAllowedPort) return true;
 
       logger.warn(`Rejected WebSocket connection from unauthorized origin: ${info.origin}`);
       return false;
