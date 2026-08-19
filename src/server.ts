@@ -466,6 +466,9 @@ app.get('/api/elements/search', (req: Request, res: Response) => {
     if (Object.keys(filters).length > 0) {
       results = results.filter(element => {
         return Object.entries(filters).every(([key, value]) => {
+          if (['__proto__', 'constructor', 'prototype'].includes(key)) {
+            return false;
+          }
           return (element as any)[key] === value;
         });
       });
