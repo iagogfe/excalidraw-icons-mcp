@@ -19,10 +19,9 @@ but has never been published.
 
 ## CI
 
-Four workflows, all self-contained. A public repository cannot call a reusable
-workflow from a private one, so nothing here is shared with `shared workflow repository`
-— the style gate is a copy under `.github/actions/gate-estilo`, and a fix there
-has to be carried across by hand.
+Four workflows, all self-contained. The style gate is vendored under
+`.github/actions/gate-estilo`, and changes to it have to be carried across by
+hand when the shared implementation changes.
 
 - `ci.yml` — build matrix (Node 20/22/24), testes determinísticos, E2E Playwright e style gate
 - `security.yml` — Gitleaks, osv-scanner, Semgrep, CodeQL

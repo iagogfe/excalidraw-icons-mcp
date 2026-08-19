@@ -1,8 +1,7 @@
-# Dependabot, e nao Renovate como nos repositorios privados: o renovate.json
-# daqueles estende `shared Dependabot preset`, um preset privado, que um
-# repositorio publico nao consegue ler. O Dependabot e nativo, nao exige app
-# instalado, e sabe atualizar SHA pinado de action junto com o comentario da
-# versao ao lado — que e exatamente como as actions estao fixadas aqui.
+# Dependabot nativo atualiza as actions pinadas e as dependencias do projeto,
+# sem exigir configuracao adicional de aplicativo. Ele tambem atualiza o SHA
+# pinado da action junto com o comentario da versao ao lado — exatamente como
+# as actions estao fixadas aqui.
 #
 # O `cooldown` repete em cada ecossistema de proposito: e por entrada, nao
 # global. Ele segura uma versao recem-publicada antes de propo-la, porque

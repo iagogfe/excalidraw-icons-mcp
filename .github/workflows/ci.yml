@@ -1,8 +1,7 @@
 # Build, type-check e gate de estilo.
 #
-# Este repositorio e publico, entao a pipeline e autocontida: um repositorio
-# publico nao consegue chamar reusable workflow de repositorio privado, o que
-# descarta reaproveitar `shared workflow repository` aqui.
+# Este repositorio e publico, entao a pipeline e autocontida. A action local de
+# gate de estilo fica versionada junto com o codigo para manter o CI auditavel.
 #
 # Actions de terceiros pinadas por SHA completo — tag e mutavel, e foi o vetor
 # dos ataques tj-actions (mar/2025) e trivy-action (mar/2026). O Dependabot
