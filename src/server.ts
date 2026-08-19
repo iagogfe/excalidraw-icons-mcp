@@ -31,6 +31,11 @@ import WebSocket from 'ws';
 // Load environment variables
 dotenv.config();
 
+const PORT = parseInt(process.env.PORT || '3000', 10);
+const HOST = process.env.HOST || '127.0.0.1';
+const LOOPBACK_GUARD_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '::']);
+const LOOPBACK_ADDRESSES = ['127.0.0.1', '::1'];
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -39,7 +44,30 @@ const app = express();
 app.disable('etag');
 app.disable('x-powered-by');
 const server = createServer(app);
-const wss = new WebSocketServer({ server });
+
+const wss = new WebSocketServer({
+  server,
+  verifyClient: (info: { origin: string | undefined; secure: boolean; req: any }) => {
+    // If there is no Origin header (e.g. programmatic MCP client), allow connection
+    if (!info.origin) return true;
+
+    try {
+      const originUrl = new URL(info.origin);
+      const reqHost = info.req.headers.host; // This includes the port, e.g., "localhost:3000"
+
+      // To prevent CSWSH, ensure that the Origin matches the Host header.
+      if (reqHost && originUrl.host === reqHost) {
+        return true;
+      }
+
+      logger.warn(`Rejected WebSocket connection from unauthorized origin: ${info.origin} (Expected Host: ${reqHost})`);
+      return false;
+    } catch (error) {
+      logger.error(`Error parsing WebSocket origin URL: ${info.origin}`, error);
+      return false;
+    }
+  }
+});
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));
@@ -1217,11 +1245,6 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 });
 
 // Start server
-const PORT = parseInt(process.env.PORT || '3000', 10);
-const HOST = process.env.HOST || '127.0.0.1';
-const LOOPBACK_GUARD_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '::']);
-const LOOPBACK_ADDRESSES = ['127.0.0.1', '::1'];
-
 function formatHostForUrl(host: string): string {
   return host.includes(':') ? `[${host}]` : host;
 }
