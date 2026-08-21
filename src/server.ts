@@ -39,7 +39,43 @@ const app = express();
 app.disable('etag');
 app.disable('x-powered-by');
 const server = createServer(app);
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({
+  server,
+  verifyClient: (info, callback) => {
+    const origin = info.req.headers.origin;
+    if (!origin) {
+      // Allow connections without Origin header (e.g., from server-to-server or tools that don't send it)
+      return callback(true);
+    }
+
+    try {
+      // First check X-Forwarded-Host if running behind a proxy, fallback to Host
+      const rawHost = info.req.headers['x-forwarded-host'] || info.req.headers.host;
+      const host = Array.isArray(rawHost) ? rawHost[0] : rawHost;
+
+      if (!host) {
+        return callback(false, 400, 'Bad Request: Missing Host header');
+      }
+
+      const originUrl = new URL(origin);
+
+      const [hostName, hostPort] = host.split(':');
+      const defaultPort = originUrl.protocol === 'https:' ? '443' : '80';
+      const expectedPort = hostPort || defaultPort;
+      const originPort = originUrl.port || defaultPort;
+
+      if (originUrl.hostname !== hostName || originPort !== expectedPort) {
+        logger.warn(`Rejected WebSocket connection: Origin ${origin} does not match Host ${host}`);
+        return callback(false, 403, 'Forbidden: Origin does not match Host');
+      }
+
+      callback(true);
+    } catch (err) {
+      logger.warn(`Rejected WebSocket connection: Invalid Origin header ${origin}`);
+      callback(false, 400, 'Bad Request: Invalid Origin');
+    }
+  }
+});
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));
