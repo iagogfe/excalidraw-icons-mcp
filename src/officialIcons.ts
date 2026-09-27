@@ -77,7 +77,28 @@ const K8S_NAME_EXPANSIONS: Record<string, string> = {
 };
 
 // Index entries carry their normalized forms, computed once at index build.
-type IndexedIcon = OfficialIconResult & { nameNorm: Norm; domainNameNorm: Norm };
+type IndexedIcon = OfficialIconResult & { nameNorm: Norm; coreNorm: Norm; domainNameNorm: Norm; domainWord: string; tier: number };
+
+// Vendor prefixes are how packs name files, not how agents ask: "lambda" should
+// match "AWS Lambda" as exactly as "Lambda" would, or a generic λ glyph wins.
+// Not "oracle": in Azure's "Oracle Database" it names the product.
+const VENDOR_WORDS = new Set(['amazon', 'aws', 'azure', 'google']);
+
+function stripVendor(n: Norm): Norm {
+  const words = n.words.filter(w => !VENDOR_WORDS.has(w));
+  return words.length ? { words, joined: words.join(' ') } : n;
+}
+
+// AWS ships service (Arch_), resource (Res_) and group (_32) icons under one
+// name; a bare service name means the service. Cached Iconify downloads stay
+// findable offline but never outrank a bundled icon.
+function iconTier(rel: string): number {
+  if (rel.startsWith('_cache' + path.sep)) return -30;
+  const base = path.basename(rel);
+  if (base.endsWith('_32.svg')) return -2;
+  if (base.startsWith('Res_')) return -1;
+  return 0;
+}
 
 function walkSvgs(dir: string, domain: string, out: IndexedIcon[]): void {
   if (!fs.existsSync(dir)) return;
@@ -94,13 +115,17 @@ function walkSvgs(dir: string, domain: string, out: IndexedIcon[]): void {
       const base = path.basename(entry.name, '.svg');
       const expanded = domain === 'kubernetes' ? K8S_NAME_EXPANSIONS[base] : undefined;
       const name = expanded ?? titleCaseFromFilename(entry.name);
+      const nameNorm = normName(name);
       out.push({
         ref: `local:${rel}`,
         name,
         domain,
         source: `bundled icons/${domain}`,
-        nameNorm: normName(name),
+        nameNorm,
+        coreNorm: stripVendor(nameNorm),
         domainNameNorm: normName(domain + ' ' + name),
+        domainWord: normWords(domain)[0] ?? '',
+        tier: iconTier(rel),
       });
     }
   }
@@ -233,6 +258,7 @@ const QUERY_ALIASES: Record<string, string> = {
 const PHRASE_ALIASES: Record<string, string[]> = {
   'blob storage': ['storage accounts', 'blob'],
   'azure blob storage': ['azure storage accounts', 'azure blob'],
+  'azure kubernetes': ['azure kubernetes services'],
 };
 
 // The original query plus a variant with each word replaced by its alias,
@@ -271,7 +297,7 @@ function simpleIconsIndex(): SimpleIconEntry[] {
   return out;
 }
 
-function localResults(query: string): Array<OfficialIconResult & { _score: number }> {
+function localResults(query: string, prefer: string[] = []): Array<OfficialIconResult & { _score: number }> {
   const results: Array<OfficialIconResult & { _score: number }> = [];
   const variants = queryVariants(query);
   const scoreAll = (n: Norm): number => {
@@ -288,9 +314,12 @@ function localResults(query: string): Array<OfficialIconResult & { _score: numbe
     // without scoring the name — misses (the bulk of the index) scan once.
     const d = scoreAll(item.domainNameNorm);
     if (d === 0) continue;
-    const s = scoreAll(item.nameNorm) || d;
-    const { nameNorm, domainNameNorm, ...pub } = item;
-    results.push({ ...pub, _score: s });
+    const s = Math.max(scoreAll(item.nameNorm), scoreAll(item.coreNorm)) || d;
+    const { nameNorm, coreNorm, domainNameNorm, domainWord, tier, ...pub } = item;
+    // Naming the pack ("kubernetes service", "azure vm"), in the query or as
+    // the diagram's context, picks it over a same-named icon from another pack.
+    const named = prefer.includes(domainWord) || variants.some(v => v.words.includes(domainWord)) ? 1 : 0;
+    results.push({ ...pub, _score: s + tier + named });
   }
 
   for (const entry of simpleIconsIndex()) {
@@ -348,8 +377,8 @@ async function iconifySearch(query: string, limit: number): Promise<Array<Offici
   }
 }
 
-export async function searchOfficialIcons(query: string, limit = 10): Promise<OfficialIconResult[]> {
-  const results = localResults(query);
+export async function searchOfficialIcons(query: string, limit = 10, context = ''): Promise<OfficialIconResult[]> {
+  const results = localResults(query, normWords(context));
 
   // Iconify is the documented last resort: only hit the network when no
   // bundled/standardized source matched at all. Topping results up to `limit`
@@ -360,6 +389,26 @@ export async function searchOfficialIcons(query: string, limit = 10): Promise<Of
 
   results.sort((a, b) => b._score - a._score);
   return results.slice(0, limit).map(({ _score, ...r }) => r);
+}
+
+// Vendor packs a diagram context can name; a hit from another one is suspect.
+const CLOUD_PACKS = new Set(['aws', 'azure', 'gcp', 'oracle', 'kubernetes']);
+
+// Top icon per item: one call per diagram, not one search per node. `verify`
+// flags Iconify fallbacks and hits from a pack other than the context. Runs
+// sequentially so misses never fan out into parallel Iconify requests.
+export async function resolveIcons(
+  items: string[],
+  context = '',
+): Promise<Array<{ item: string; icon: OfficialIconResult | null; verify: boolean }>> {
+  const pack = context.toLowerCase().trim();
+  const out = [];
+  for (const item of items) {
+    const [icon] = await searchOfficialIcons(item, 1, context);
+    const otherPack = CLOUD_PACKS.has(pack) && CLOUD_PACKS.has(icon?.domain ?? '') && icon?.domain !== pack;
+    out.push({ item, icon: icon ?? null, verify: icon?.domain === 'iconify' || otherPack });
+  }
+  return out;
 }
 
 async function resolveIconify(ref: string): Promise<{ data: Buffer; mimeType: string }> {

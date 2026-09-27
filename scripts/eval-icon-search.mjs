@@ -1,4 +1,5 @@
-// Eval harness: recall@3 of search_official_icon over a fixed gold set.
+// Eval harness: recall@3 and recall@1 of search_official_icon over a fixed gold set.
+// recall@1 is what resolve_icons returns, so it is the number that saves round-trips.
 // Deterministic/offline: network (iconify) is disabled so only bundled sources count.
 // Usage: node scripts/eval-icon-search.mjs [--verbose]
 
@@ -7,14 +8,14 @@ import { searchOfficialIcons } from '../dist/officialIcons.js';
 // Kill network so iconify fallback never pollutes results (it catches and returns []).
 globalThis.fetch = () => Promise.reject(new Error('offline eval'));
 
-// Each case: query as an agent would phrase it -> regexes; hit if ANY of the top-3
-// refs matches ANY regex.
+// Each case: query as an agent would phrase it (plus the diagram context when the
+// name alone is ambiguous) -> regexes; hit if ANY of the top-k refs matches ANY regex.
 const GOLD = [
   // AWS
   { q: 's3', expect: [/Arch_Amazon-Simple-Storage-Service_48/] },
-  { q: 's3 bucket', expect: [/Arch_Amazon-Simple-Storage-Service_48/] },
+  { q: 's3 bucket', expect: [/Arch_Amazon-Simple-Storage-Service_48/, /Res_Amazon-Simple-Storage-Service_Bucket_48/] },
   { q: 'ec2', expect: [/Arch_Amazon-EC2_48/] },
-  { q: 'ec2 instance', expect: [/Arch_Amazon-EC2/] },
+  { q: 'ec2 instance', expect: [/Arch_Amazon-EC2/, /Res_Amazon-EC2_Instance_48/] },
   { q: 'lambda', expect: [/Arch_AWS-Lambda_48/] },
   { q: 'aws lambda', expect: [/Arch_AWS-Lambda_48/] },
   { q: 'sqs', expect: [/Arch_Amazon-Simple-Queue-Service_48/] },
@@ -40,8 +41,10 @@ const GOLD = [
   { q: 'cloud run', expect: [/cloud_run\.svg/] },
   { q: 'gke', expect: [/google_kubernetes_engine/] },
   { q: 'cloud sql', expect: [/cloud_sql\.svg/] },
-  { q: 'pub sub', expect: [/gcp\/pubsub/] },
-  { q: 'pubsub', expect: [/gcp\/pubsub/] },
+  // Azure ships a Web PubSub icon too, so the bare name needs the diagram context.
+  { q: 'pub sub', ctx: 'gcp', expect: [/gcp\/pubsub/] },
+  { q: 'pubsub', ctx: 'gcp', expect: [/gcp\/pubsub/] },
+  { q: 'pub sub', ctx: 'azure', expect: [/azure\/pubsub/] },
   { q: 'compute engine', expect: [/compute_engine\.svg/] },
   { q: 'cloud storage', expect: [/gcp\/cloud_storage\.svg/] },
   // Oracle
@@ -64,14 +67,17 @@ const GOLD = [
 
 const verbose = process.argv.includes('--verbose');
 let hits = 0;
+let hits1 = 0;
 const misses = [];
 
-for (const { q, expect } of GOLD) {
-  const results = await searchOfficialIcons(q, 3);
+for (const { q, ctx, expect } of GOLD) {
+  const results = await searchOfficialIcons(q, 3, ctx);
   const refs = results.map(r => r.ref);
-  const hit = refs.some(ref => expect.some(re => re.test(ref)));
+  const matches = ref => expect.some(re => re.test(ref));
+  const hit = refs.some(matches);
   if (hit) hits++;
-  else misses.push({ q, got: refs });
+  if (refs[0] && matches(refs[0])) hits1++;
+  else misses.push({ q: ctx ? `${q} [${ctx}]` : q, got: refs });
   if (verbose) {
     console.log(`${hit ? 'HIT ' : 'MISS'} ${q.padEnd(28)} -> ${refs.join(' | ') || '(nothing)'}`);
   }
@@ -83,4 +89,5 @@ if (misses.length && !verbose) {
   for (const m of misses) console.log(`  ${m.q.padEnd(28)} -> ${m.got.join(' | ') || '(nothing)'}`);
 }
 console.log(`recall@3: ${hits}/${GOLD.length}`);
+console.log(`recall@1: ${hits1}/${GOLD.length}`);
 console.log(`METRIC ${recall.toFixed(1)}`);

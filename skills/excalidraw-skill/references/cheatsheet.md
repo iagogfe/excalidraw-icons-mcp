@@ -72,6 +72,7 @@
 | Tool | Description | Required params |
 |------|-------------|-----------------|
 | `search_official_icon` | Search standardized icon libraries (local vendor packs, Kubernetes, simple-icons, Tabler, Iconify); returns refs for `add_image` | `query` |
+| `resolve_icons` | Resolve a whole diagram's component names to one icon ref each in one call (top result of `search_official_icon`); optional `context` pack preference | `items`, `context` |
 | `add_image` | Insert a raster/SVG image element; provide one of `iconRef` / `filePath` / `data` | `x`, `y` |
 | `search_library_items` | Search community libraries.excalidraw.com for ready-made shapes | `query` |
 | `insert_library_item` | Insert a library item (from `search_library_items`) as a grouped unit; returns `anchorId` for arrows | `ref`, `x`, `y` |
