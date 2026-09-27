@@ -23,7 +23,7 @@ import {
 } from './types.js';
 import { autoLayout, detectLayoutIssues, LayoutElement } from './layout.js';
 import { searchLibraryItems, getItemByRef, instantiateLibraryItem } from './libraries.js';
-import { searchOfficialIcons, resolveIconRef, recolorSvg } from './officialIcons.js';
+import { searchOfficialIcons, resolveIcons, resolveIconRef, recolorSvg } from './officialIcons.js';
 import { DIAGRAM_CONVENTIONS, DIAGRAM_TYPES } from './diagramConventions.js';
 
 // Load environment variables
@@ -546,6 +546,18 @@ const tools: Tool[] = [
         limit: { type: 'number' }
       },
       required: ['query']
+    }
+  },
+  {
+    name: 'resolve_icons',
+    description: 'Resolve every node of a diagram to its best icon in ONE call: pass the component names, get back one iconRef per item for add_image. Same sources and ranking as search_official_icon, top result only. Prefer this over one search_official_icon per node; fall back to search_official_icon only for an item whose returned name looks wrong or that has no match.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        items: { type: 'array', items: { type: 'string' }, description: 'Component names as they appear in the diagram, e.g. ["api gateway", "lambda", "dynamodb", "s3"]' },
+        context: { type: 'string', description: 'Optional pack to prefer when a name exists in several. Exactly one of: "aws", "azure", "gcp", "oracle", "kubernetes". E.g. "pub sub" with context "gcp" resolves to Google Pub/Sub, not Azure Web PubSub.' }
+      },
+      required: ['items']
     }
   },
   {
@@ -2492,6 +2504,23 @@ server.setRequestHandler('tools/call', async (request: CallToolRequest) => {
           content: [{
             type: 'text',
             text: `Found ${results.length} icon(s) for "${params.query}":\n\n${lines.join('\n')}\n\nInsert one with add_image using its ref as iconRef. Pass targetWidth (~80-120px) to normalize sizes.`
+          }]
+        };
+      }
+
+      case 'resolve_icons': {
+        const params = z.object({
+          items: z.array(z.string().min(1)).min(1).max(100),
+          context: z.string().max(40).optional()
+        }).parse(args);
+        const resolved = await resolveIcons(params.items, params.context);
+        const lines = resolved.map(({ item, icon, verify }) => icon
+          ? `  ${item} -> ${icon.ref}  (${icon.name} — ${icon.domain})${verify ? '  [verify: weak match, check with search_official_icon]' : ''}`
+          : `  ${item} -> no match (try search_official_icon or search_library_items)`);
+        return {
+          content: [{
+            type: 'text',
+            text: `Resolved ${resolved.filter(r => r.icon && !r.verify).length}/${resolved.length} item(s):\n\n${lines.join('\n')}\n\nInsert each with add_image using its ref as iconRef.`
           }]
         };
       }

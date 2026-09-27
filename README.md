@@ -14,7 +14,7 @@ Two things set it apart from the upstream fork it grew from:
 
 This repo provides:
 
-- **MCP Server**: 31 tools over the Model Context Protocol (Claude Desktop, Cursor, Codex CLI, etc.) — icon search & insertion, element CRUD, auto-layout, per-domain diagram conventions
+- **MCP Server**: 32 tools over the Model Context Protocol (Claude Desktop, Cursor, Codex CLI, etc.) — icon search & insertion, element CRUD, auto-layout, per-domain diagram conventions
 - **Agent Skill**: Portable skill for Claude Code, Codex CLI, and other skill-enabled agents
 
 Keywords: Excalidraw MCP server, AWS/Azure/GCP icons, AI architecture diagrams, diagrams as code, Claude Code skill, Codex CLI skill, Cursor MCP, Mermaid to Excalidraw.
@@ -41,7 +41,7 @@ Keywords: Excalidraw MCP server, AWS/Azure/GCP icons, AI architecture diagrams, 
   - [OpenCode](#opencode)
   - [Antigravity (Google)](#antigravity-google)
 - [Agent Skill (Optional)](#agent-skill-optional)
-- [MCP Tools (31 Total)](#mcp-tools-31-total)
+- [MCP Tools (32 Total)](#mcp-tools-32-total)
 - [Vendor Icon Packs](#vendor-icon-packs)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
@@ -61,7 +61,7 @@ Excalidraw now has an [official MCP](https://github.com/excalidraw/excalidraw-mc
 
 | | Official Excalidraw MCP | This Project |
 |---|---|---|
-| **Approach** | Prompt in, diagram out (one-shot) | Programmatic element-level control (31 tools) |
+| **Approach** | Prompt in, diagram out (one-shot) | Programmatic element-level control (32 tools) |
 | **State** | Stateless — each call is independent | Persistent live canvas with real-time sync |
 | **Element CRUD** | No | Full create / read / update / delete per element |
 | **AI sees the canvas** | No | `describe_scene` (structured text) + `get_canvas_screenshot` (image) |
@@ -439,13 +439,13 @@ EXPRESS_SERVER_URL=http://127.0.0.1:3000 node skills/excalidraw-skill/scripts/im
 
 See `skills/excalidraw-skill/SKILL.md` and `skills/excalidraw-skill/references/cheatsheet.md`.
 
-## MCP Tools (31 Total)
+## MCP Tools (32 Total)
 
 | Category | Tools |
 |---|---|
 | **Element CRUD** | `create_element`, `get_element`, `update_element`, `delete_element`, `query_elements`, `batch_create_elements`, `duplicate_elements` |
 | **Layout** | `align_elements`, `distribute_elements`, `group_elements`, `ungroup_elements`, `lock_elements`, `unlock_elements` |
-| **Icons & Libraries** | `search_official_icon`, `add_image`, `search_library_items`, `insert_library_item` |
+| **Icons & Libraries** | `search_official_icon`, `resolve_icons`, `add_image`, `search_library_items`, `insert_library_item` |
 | **Scene Awareness** | `describe_scene`, `get_canvas_screenshot`, `validate_layout` |
 | **File I/O** | `export_scene`, `import_scene`, `export_to_image`, `export_to_excalidraw_url`, `create_from_mermaid` |
 | **State Management** | `clear_canvas`, `snapshot_scene`, `restore_snapshot` |
