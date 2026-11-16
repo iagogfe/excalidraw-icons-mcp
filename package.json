@@ -103,10 +103,12 @@
     },
     "@excalidraw/mermaid-to-excalidraw": {
       "nanoid": "^5.0.9",
-      "mermaid": "^11.16.1"
+      "mermaid": "^11.16.1",
+      "katex": "^0.18.2"
     },
     "postcss": {
       "nanoid": "^3.3.18"
-    }
+    },
+    "shell-quote": "^1.11.0"
   }
 }
